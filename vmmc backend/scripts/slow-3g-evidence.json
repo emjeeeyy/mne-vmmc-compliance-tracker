@@ -1,0 +1,12 @@
+{
+  "loginShowedBusyState": true,
+  "loginSucceeded": true,
+  "loginMs": 21020,
+  "complianceShowedLoadingState": true,
+  "complianceSucceeded": true,
+  "complianceMs": 13853,
+  "uploadShowedBusyState": true,
+  "uploadSucceeded": true,
+  "uploadMs": 14759,
+  "pendingBadgeCountAfterSingleSubmit": 1
+}

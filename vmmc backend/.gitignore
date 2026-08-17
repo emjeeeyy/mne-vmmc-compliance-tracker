@@ -1,0 +1,32 @@
+# compiled output
+/dist
+/node_modules
+
+# test / coverage output
+/coverage
+
+# typescript incremental build cache
+*.tsbuildinfo
+
+# logs
+*.log
+npm-debug.log*
+
+# env
+.env
+.env.*.local
+
+# supabase
+/supabase/.temp
+/supabase/.branches
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+/.idea
+/.vscode
+
+# stray disposable scratch scripts (should be deleted before commit, ignored defensively)
+scripts/_tmp-*

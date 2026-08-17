@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Public+Sans:wght@400;500;600&display=swap');
+@import 'tailwindcss';
+
+:root {
+  --vmmc-green: #008D46;
+  --vmmc-blue: #1D3D93;
+  --status-alert: #D32F2F;
+  --status-compliance: #2E7D32;
+  --status-warning: #F9AB25;
+  --status-info: #0288D1;
+  --text-primary: #121212;
+  --text-body: #545454;
+  --border-gray: #E0E0E0;
+  --surface-white: #FFFFFF;
+  --surface-offwhite: #F4F7F6;
+  --compliance-bg: #C8E6C9;
+  --info-bg: #BBDEFB;
+  --chrome-navy: #0E1E2B;
+  --chrome-navy-2: #152B3C;
+  --chrome-muted: #7C8B99;
+}
+
+body {
+  font-family: 'Public Sans', sans-serif;
+  color: var(--text-primary);
+  background: var(--surface-offwhite);
+  margin: 0;
+  padding: 0;
+}
+
+/* Keep the app's own colors/borders/backgrounds even when the OS/browser is
+   running in a forced-colors (e.g. Windows High Contrast) mode, instead of
+   the browser substituting system colors and drawing default control
+   outlines over every button. Browsers set forced-color-adjust: auto
+   directly on native form controls in their UA stylesheet, which an
+   ancestor-level rule alone won't override, so this must also target those
+   elements explicitly. */
+html,
+button,
+input,
+select,
+textarea {
+  forced-color-adjust: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Poppins', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
