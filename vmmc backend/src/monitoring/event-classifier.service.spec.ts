@@ -177,6 +177,23 @@ describe('EventClassifierService.classify', () => {
     const emitted = await dueForReminder.classifier.classify(makeRecord(), new Date('2026-06-23'));
     expect(emitted).toEqual(['WEEKLY_REMINDER']);
   });
+
+  it('emits THREE_MONTH_HR_NOTICE once the employee is still non-compliant three months after birthday', async () => {
+    const existingEvents = [
+      { event_subtype: 'WINDOW_OPENED', detected_at: '2026-06-01T00:00:00Z' },
+      { event_subtype: 'BIRTHDAY_DUE', detected_at: '2026-06-15T00:00:00Z' },
+      { event_subtype: 'SLA_BREACH', detected_at: '2026-07-05T00:00:00Z' },
+    ];
+
+    const { classifier } = buildClassifier([
+      { data: existingEvents, error: null },
+      { data: null, error: null },
+      { data: EVENT_ROW, error: null }, // emit(THREE_MONTH_HR_NOTICE)
+    ]);
+
+    const emitted = await classifier.classify(makeRecord(), new Date('2026-09-15'));
+    expect(emitted).toEqual(['THREE_MONTH_HR_NOTICE']);
+  });
 });
 
 describe('EventClassifierService — PEP / Immunization overdue classification', () => {

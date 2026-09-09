@@ -6,6 +6,7 @@ export type EventSubtype =
   | 'FIRST_REMINDER'
   | 'BIRTHDAY_DUE'
   | 'WEEKLY_REMINDER'
+  | 'THREE_MONTH_HR_NOTICE'
   | 'SLA_BREACH'
   | 'CLINICAL_ALERT'
   | 'PEP_FOLLOWUP_MISSED'

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { isAuthenticated } from './auth'
+import { isAuthenticated, requiresPasswordChange } from './auth'
 
 /**
  * Auth is sessionStorage-based (client-only), so the check can't run on the
@@ -18,8 +18,12 @@ export function useAuthGuard(mode: 'auth' | 'guest') {
       router.replace('/login')
       return
     }
+    if (mode === 'auth' && authed && requiresPasswordChange()) {
+      router.replace('/first-login')
+      return
+    }
     if (mode === 'guest' && authed) {
-      router.replace('/dashboard')
+      router.replace(requiresPasswordChange() ? '/first-login' : '/dashboard')
       return
     }
     setReady(true)

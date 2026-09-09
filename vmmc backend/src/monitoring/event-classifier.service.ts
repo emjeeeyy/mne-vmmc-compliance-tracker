@@ -103,6 +103,18 @@ export class EventClassifierService {
         await this.emit(record, 'EXCEPTION', 'SLA_BREACH', 2, 'Birth-month deadline passed with no approved clearance.');
         emitted.push('SLA_BREACH');
       }
+
+      const daysAfterBirthday = daysBetween(today, new Date(record.birthday_date));
+      if (daysAfterBirthday >= 90 && !subtypesSeen.has('THREE_MONTH_HR_NOTICE')) {
+        await this.emit(
+          record,
+          'WARNING',
+          'THREE_MONTH_HR_NOTICE',
+          1,
+          'Three months after birthday with no approved clearance — HR follow-up required.',
+        );
+        emitted.push('THREE_MONTH_HR_NOTICE');
+      }
     } else if (today >= birthday) {
       if (!subtypesSeen.has('BIRTHDAY_DUE')) {
         await client.from('compliance_records').update({ status: 'NON_COMPLIANT' }).eq('id', record.id);
@@ -117,6 +129,18 @@ export class EventClassifierService {
           await this.emit(record, 'WARNING', 'WEEKLY_REMINDER', 1, 'Weekly reminder — still no submission.');
           emitted.push('WEEKLY_REMINDER');
         }
+      }
+
+      const daysAfterBirthday = daysBetween(today, new Date(record.birthday_date));
+      if (daysAfterBirthday >= 90 && !subtypesSeen.has('THREE_MONTH_HR_NOTICE')) {
+        await this.emit(
+          record,
+          'WARNING',
+          'THREE_MONTH_HR_NOTICE',
+          1,
+          'Three months after birthday with no approved clearance — HR follow-up required.',
+        );
+        emitted.push('THREE_MONTH_HR_NOTICE');
       }
     } else if (today >= windowOpen) {
       if (!subtypesSeen.has('FIRST_REMINDER')) {

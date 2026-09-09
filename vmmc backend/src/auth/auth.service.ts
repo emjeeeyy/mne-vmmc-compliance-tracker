@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { AuditService } from '../audit/audit.service';
+import { validateEmployeeId } from '../common/assert-access';
 import { describeUserAgent } from '../common/describe-user-agent';
 import { EmailChannel } from '../notifications/channels/email.channel';
 import { SupabaseService } from '../supabase/supabase.service';
@@ -18,10 +19,11 @@ import { Role } from './types/role';
 const OTP_TTL_MINUTES = 10;
 const RESET_TOKEN_TTL = '5m';
 const RESET_TOKEN_PURPOSE = 'password_reset';
+const DEFAULT_PASSWORD = 'password123';
 
 interface EmployeeRow {
   id: string;
-  auth_user_id: string;
+  auth_user_id: string | null;
   employee_id: string;
   full_name: string;
   job_title: string | null;
@@ -29,6 +31,7 @@ interface EmployeeRow {
   phone: string | null;
   role: Role;
   department_id: string;
+  must_change_password?: boolean;
 }
 
 const PORTAL_ROLES: Record<'staff' | 'admin', Role[]> = {
@@ -81,7 +84,62 @@ export class AuthService {
       accessToken: data.session.access_token,
       expiresAt: data.session.expires_at,
       user: this.toPublicUser(employee),
+      mustChangePassword: Boolean(employee.must_change_password),
     };
+  }
+
+  async signup(employeeId: string, employmentType?: 'PERMANENT' | 'COS') {
+    const normalizedId = validateEmployeeId(employeeId, employmentType).toUpperCase();
+    const employee = await this.findEmployeeByEmployeeId(normalizedId);
+    if (!employee) throw new BadRequestException('No employee matches that ID. Please contact HR.');
+    if (employee.auth_user_id) throw new BadRequestException('This employee already has an account.');
+
+    const { data: created, error: createError } = await this.supabaseService.getClient().auth.admin.createUser({
+      email: employee.email,
+      password: DEFAULT_PASSWORD,
+      email_confirm: true,
+      user_metadata: { employee_id: employee.employee_id },
+    });
+    if (createError || !created?.user) throw new BadRequestException(createError?.message ?? 'Unable to create the account.');
+
+    const { error: linkError } = await this.supabaseService
+      .getClient()
+      .from('employees')
+      .update({ auth_user_id: created.user.id, must_change_password: true })
+      .eq('id', employee.id);
+    if (linkError) throw new BadRequestException(linkError.message);
+
+    return {
+      message: 'Account created. Use the default password password123 to sign in. You will be required to change it on first login.',
+    };
+  }
+
+  async completeFirstLoginPasswordChange(employeeId: string, currentPassword: string, newPassword: string) {
+    const employee = await this.findEmployeeByEmployeeId(employeeId);
+    if (!employee) throw new UnauthorizedException('Invalid Employee ID or password.');
+    if (!employee.must_change_password) {
+      throw new BadRequestException('This account does not require a password change.');
+    }
+
+    const { error } = await this.supabaseService.getAnonClient().auth.signInWithPassword({
+      email: employee.email,
+      password: currentPassword,
+    });
+    if (error) throw new UnauthorizedException('Current password is incorrect.');
+
+    const { error: updateError } = await this.supabaseService.getClient().auth.admin.updateUserById(employee.auth_user_id!, {
+      password: newPassword,
+    });
+    if (updateError) throw new BadRequestException(updateError.message);
+
+    const { error: markError } = await this.supabaseService
+      .getClient()
+      .from('employees')
+      .update({ must_change_password: false })
+      .eq('id', employee.id);
+    if (markError) throw new BadRequestException(markError.message);
+
+    return { message: 'Password updated. You can now sign in with your new password.' };
   }
 
   async forgotPassword(contact: string) {
@@ -216,7 +274,7 @@ export class AuthService {
     const { data } = await this.supabaseService
       .getClient()
       .from('employees')
-      .select('id, auth_user_id, employee_id, full_name, job_title, email, phone, role, department_id')
+      .select('id, auth_user_id, employee_id, full_name, job_title, email, phone, role, department_id, must_change_password')
       .eq('employee_id', employeeId)
       .maybeSingle();
     return data as EmployeeRow | null;

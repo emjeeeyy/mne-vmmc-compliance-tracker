@@ -20,6 +20,7 @@ const SUBTYPE_LABELS: Record<string, string> = {
   FIRST_REMINDER: 'Reminder: your annual clearance window is open — please submit your results.',
   BIRTHDAY_DUE: 'Your clearance is due today — please submit your results as soon as possible.',
   WEEKLY_REMINDER: 'Reminder: your annual clearance is still pending.',
+  THREE_MONTH_HR_NOTICE: 'HR notice: this employee has remained non-compliant for 3 months after their birthday and requires follow-up.',
   SLA_BREACH: 'Your clearance deadline has passed without an approved submission.',
   CLINICAL_ALERT: 'Your submitted result requires immediate clinical review.',
 };

@@ -45,8 +45,8 @@ export class DocumentsController {
   }
 
   @Patch(':id/review')
-  @Roles('ADMIN')
-  review(@CurrentUser() admin: EmployeeContext, @Param('id') id: string, @Body() dto: ReviewDocumentDto) {
-    return this.documentsService.review(admin, id, dto);
+  @Roles('ADMIN', 'UNIT_HEAD')
+  review(@CurrentUser() currentUser: EmployeeContext, @Param('id') id: string, @Body() dto: ReviewDocumentDto) {
+    return this.documentsService.review(currentUser, id, dto);
   }
 }

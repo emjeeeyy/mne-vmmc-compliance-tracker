@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff } from 'lucide-react'
 import VmmcSeal from '@/components/VmmcSeal'
 import { fadeRise } from '@/lib/motion'
-import { login, type AuthSession } from '@/lib/auth'
+import { login, type AuthSession, setPasswordChangeRequired } from '@/lib/auth'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
 
 export default function Login() {
@@ -35,6 +35,11 @@ export default function Login() {
         portal: activeTab,
       })
       login(session)
+      if (session.mustChangePassword) {
+        setPasswordChangeRequired(true)
+        router.push('/first-login')
+        return
+      }
       router.push('/dashboard')
     } catch (err) {
       if (err instanceof ApiError) {
@@ -94,7 +99,7 @@ export default function Login() {
   )
 
   const rememberRow = (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 32 }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 10, fontWeight: 700, color: '#1f3151' }}>
         <div style={{ width: 14, height: 14, borderRadius: 4, background: remember ? '#008d46' : '#fff', border: remember ? 'none' : '1px solid #cbd5e0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {remember && <svg width="9" height="7" viewBox="0 0 10 8" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
@@ -103,6 +108,15 @@ export default function Login() {
         Remember Me
       </label>
       <button onClick={() => router.push('/forgot-password')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 10, fontWeight: 700, textDecoration: 'underline' }}>Forgot Password?</button>
+    </div>
+  )
+
+  const signupPrompt = (
+    <div style={{ textAlign: 'center', marginBottom: 26, fontSize: 11, color: '#4a5568', fontWeight: 600 }}>
+      Need an account?{' '}
+      <button onClick={() => router.push('/signup')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#008d46', fontWeight: 800, textDecoration: 'underline' }}>
+        Create one here
+      </button>
     </div>
   )
 
@@ -176,6 +190,7 @@ export default function Login() {
             {employeeIdField}
             {passwordField}
             {rememberRow}
+            {signupPrompt}
             {loginError}
             {loginButton}
             {finePrint}
@@ -261,6 +276,7 @@ export default function Login() {
               {employeeIdField}
               {passwordField}
               {rememberRow}
+              {signupPrompt}
               {loginError}
               {loginButton}
               {finePrint}

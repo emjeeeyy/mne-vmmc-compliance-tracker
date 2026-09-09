@@ -1,11 +1,12 @@
 import { randomUUID } from 'crypto';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ComplianceRecordService } from '../compliance/compliance-record.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { EmployeeContext } from '../auth/types/role';
 import { EventClassifierService } from '../monitoring/event-classifier.service';
 import { ComplianceRecordRow } from '../monitoring/types';
 import { SignaturesService } from '../signatures/signatures.service';
+import { assertDocumentAccess } from '../common/assert-access';
 import { ReviewDocumentDto } from './dto/review-document.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { ALLOWED_MIME_TYPES, detectFileType } from './file-type';
@@ -127,13 +128,19 @@ export class DocumentsService {
     return (data ?? []).map((row) => this.toResponse(row));
   }
 
-  async getReviewQueue() {
-    const { data, error } = await this.supabaseService
-      .getClient()
+  async getReviewQueue(currentUser: EmployeeContext) {
+    const client = this.supabaseService.getClient();
+    const { data: currentDepartment } = await client
+      .from('departments')
+      .select('code')
+      .eq('id', currentUser.departmentId)
+      .maybeSingle();
+
+    const { data, error } = await client
       .from('documents')
       .select(
         `id, doc_type, cxr_result, genexpert_result, exam_date, uploaded_at,
-         employees!documents_employee_id_fkey ( id, employee_id, full_name, job_title,
+         employees!documents_employee_id_fkey ( id, employee_id, full_name, job_title, department_id,
            departments!employees_department_id_fkey ( name, code ) )`,
       )
       .eq('review_status', 'PENDING')
@@ -141,34 +148,51 @@ export class DocumentsService {
       .returns<ReviewQueueRow[]>();
     if (error) throw new BadRequestException(error.message);
 
-    return (data ?? []).map((row) => {
-      const employee = Array.isArray(row.employees) ? row.employees[0] : row.employees;
-      let department: ReviewQueueDepartment | undefined;
-      if (employee) department = Array.isArray(employee.departments) ? employee.departments[0] : employee.departments;
-      return {
-        id: row.id,
-        docType: row.doc_type,
-        cxrResult: row.cxr_result,
-        genexpertResult: row.genexpert_result,
-        examDate: row.exam_date,
-        uploadedAt: row.uploaded_at,
-        employee: {
-          id: employee?.id,
-          employeeId: employee?.employee_id,
-          fullName: employee?.full_name,
-          jobTitle: employee?.job_title,
-          department: department?.name,
-        },
-      };
-    });
+    return (data ?? [])
+      .filter((row) => {
+        const employee = Array.isArray(row.employees) ? row.employees[0] : row.employees;
+        const department = employee && Array.isArray(employee.departments) ? employee.departments[0] : employee?.departments;
+        try {
+          assertDocumentAccess(
+            currentUser,
+            employee?.department_id ?? currentUser.departmentId,
+            employee?.id ?? currentUser.id,
+            department?.code,
+            currentDepartment?.code,
+          );
+          return true;
+        } catch {
+          return false;
+        }
+      })
+      .map((row) => {
+        const employee = Array.isArray(row.employees) ? row.employees[0] : row.employees;
+        let department: ReviewQueueDepartment | undefined;
+        if (employee) department = Array.isArray(employee.departments) ? employee.departments[0] : employee.departments;
+        return {
+          id: row.id,
+          docType: row.doc_type,
+          cxrResult: row.cxr_result,
+          genexpertResult: row.genexpert_result,
+          examDate: row.exam_date,
+          uploadedAt: row.uploaded_at,
+          employee: {
+            id: employee?.id,
+            employeeId: employee?.employee_id,
+            fullName: employee?.full_name,
+            jobTitle: employee?.job_title,
+            department: department?.name,
+          },
+        };
+      });
   }
 
-  async review(admin: EmployeeContext, documentId: string, dto: ReviewDocumentDto) {
+  async review(currentUser: EmployeeContext, documentId: string, dto: ReviewDocumentDto) {
     const client = this.supabaseService.getClient();
 
     const { data: document, error: findError } = await client
       .from('documents')
-      .select('id, compliance_record_id, review_status')
+      .select('id, employee_id, compliance_record_id, review_status')
       .eq('id', documentId)
       .maybeSingle();
     if (findError) throw new BadRequestException(findError.message);
@@ -177,13 +201,23 @@ export class DocumentsService {
       throw new BadRequestException('This document has already been reviewed.');
     }
 
+    const { data: employee } = await client
+      .from('employees')
+      .select('department_id')
+      .eq('id', document.employee_id)
+      .maybeSingle();
+
+    if (currentUser.role !== 'ADMIN' && !(currentUser.role === 'UNIT_HEAD' && currentUser.departmentId === employee?.department_id)) {
+      throw new ForbiddenException('You do not have permission to review this document.');
+    }
+
     if (dto.action === 'reject') {
       if (!dto.reason) throw new BadRequestException('A reason is required to reject a document.');
       const { error } = await client
         .from('documents')
         .update({
           review_status: 'REJECTED',
-          reviewed_by: admin.id,
+          reviewed_by: currentUser.id,
           reviewed_at: new Date().toISOString(),
           rejection_reason: dto.reason,
         })
@@ -194,13 +228,13 @@ export class DocumentsService {
 
     // Approve
     if (!dto.signatureId) throw new BadRequestException('A signatureId is required to approve a document.');
-    await this.signaturesService.assertOwnedByAdmin(dto.signatureId, admin.id);
+    await this.signaturesService.assertOwnedByAdmin(dto.signatureId, currentUser.id);
 
     const { error: updateError } = await client
       .from('documents')
       .update({
         review_status: 'APPROVED',
-        reviewed_by: admin.id,
+        reviewed_by: currentUser.id,
         reviewed_at: new Date().toISOString(),
         signature_id: dto.signatureId,
       })

@@ -15,6 +15,7 @@ export interface AuthSession {
   accessToken: string
   expiresAt: number
   user: AuthUser
+  mustChangePassword?: boolean
 }
 
 const STORAGE_KEY = 'vmmc_session'
@@ -44,6 +45,13 @@ export function login(session: AuthSession) {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
 }
 
+export function setPasswordChangeRequired(required: boolean) {
+  const session = readSession()
+  if (!session) return
+  session.mustChangePassword = required
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+}
+
 export function logout() {
   const session = readSession()
   sessionStorage.removeItem(STORAGE_KEY)
@@ -64,6 +72,10 @@ export function getToken(): string | null {
 
 export function getUser(): AuthUser | null {
   return readSession()?.user ?? null
+}
+
+export function requiresPasswordChange(): boolean {
+  return readSession()?.mustChangePassword ?? false
 }
 
 export function getInitials(name: string) {

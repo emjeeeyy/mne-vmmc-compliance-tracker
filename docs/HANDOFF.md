@@ -63,6 +63,7 @@ Login uses **Employee ID**, not email — the email is only the underlying Supab
 - **`VMMC_TBDOTS_BuildSpec.md`** (repo root) is left as a historical record of the original plan — intentionally *not* updated to reflect post-launch changes. `docs/SYSTEM_ARCHITECTURE.md` is the current source of truth.
 
 **Not built yet:**
+- **Desktop signup + first-login password change flow is working end to end.** The API understands employee-ID signup, creates the user with the default password `password123`, and marks the employee's record with a `must_change_password` flag so the UI forces a reset on first login. The desktop screens are built and verified; the mobile version remains intentionally deferred.
 - **No CI/CD.** The `e2e/` suite and both repos' unit tests exist and pass, but nothing runs them automatically on push/PR — there's no GitHub Actions workflow (or equivalent) yet. Worth setting up once the repo is actually pushed to GitHub (see the root `.gitignore`/repo-hygiene work — §7).
 - **No deployment.** This runs locally only. Hosting, environment/secrets management, and a real domain were explicitly out of scope per the original buildspec — revisit if/when this needs to go live somewhere real.
 
