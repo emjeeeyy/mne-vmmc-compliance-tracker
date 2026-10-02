@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, Lock, Smartphone, Shield, Activity, Check, User, LogOut, Clock, ChevronRight, ChevronLeft, Eye, X, Info } from 'lucide-react'
+import { Settings, Lock, Smartphone, Shield, Activity, Check, User, LogOut, Clock, ChevronRight, ChevronLeft, Eye, X, Info, FileEdit } from 'lucide-react'
 import { fadeRise } from '@/lib/motion'
 import { logout, getRole, getInitials } from '@/lib/auth'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
@@ -25,9 +25,9 @@ const securityRows: { icon: typeof Lock; title: string; desc: string; action: st
   { icon: Shield, title: 'Data Privacy Settings', desc: 'Enforce health registry encryption and adjust data telemetry visibility rules.', action: 'REVIEW SETTINGS', view: 'data' },
 ]
 
-type MobileModalKey = 'activity' | 'privacy' | 'account'
+type MobileModalKey = 'activity' | 'privacy' | 'account' | 'changeRequests'
 
-type AdminView = 'signature' | 'privacy'
+type AdminView = 'signature' | 'privacy' | 'changeRequests'
 
 type MenuRow = { icon: typeof Clock; color: string; bg: string; label: string; modalKey: MobileModalKey | null; view?: AdminView }
 
@@ -35,12 +35,41 @@ const mobileMenuRows: MenuRow[] = [
   { icon: Clock, color: '#4299e1', bg: '#ebf8ff', label: 'Activity Logs', modalKey: 'activity' },
   { icon: Shield, color: '#38a169', bg: '#f0fff4', label: 'Privacy & Security', modalKey: 'privacy' },
   { icon: User, color: '#dd8b3a', bg: '#fffaf0', label: 'Account Security', modalKey: 'account' },
+  { icon: FileEdit, color: '#805ad5', bg: '#faf5ff', label: 'Request a Change', modalKey: 'changeRequests' },
 ]
 
 const adminMenuRows: MenuRow[] = [
   { icon: Clock, color: '#4299e1', bg: '#ebf8ff', label: 'Digital Signature', modalKey: null, view: 'signature' },
   { icon: Shield, color: '#38a169', bg: '#f0fff4', label: 'Privacy & Security', modalKey: null, view: 'privacy' },
+  { icon: FileEdit, color: '#805ad5', bg: '#faf5ff', label: 'Change Requests', modalKey: null, view: 'changeRequests' },
 ]
+
+/** Fields routed through the request-and-approve workflow instead of the direct
+ * PATCH /me/profile self-service edit (which only ever covers fullName/email/phone). */
+const EDITABLE_FIELDS: { value: string; label: string }[] = [
+  { value: 'job_title', label: 'Job Title' },
+  { value: 'birth_date', label: 'Birth Date' },
+  { value: 'employment_status', label: 'Employment Status' },
+  { value: 'department_code', label: 'Department (code, e.g. RAD)' },
+]
+
+interface ChangeRequestEntry {
+  id: string
+  fieldName: string
+  currentValue: string | null
+  requestedValue: string
+  reason: string
+  status: 'PENDING' | 'APPROVED' | 'REJECTED'
+  reviewNotes: string | null
+  createdAt: string
+  employee?: { employeeId: string; fullName: string; jobTitle: string | null }
+}
+
+const changeRequestStatusStyle: Record<ChangeRequestEntry['status'], { bg: string; color: string }> = {
+  PENDING: { bg: '#fffbea', color: '#b7791f' },
+  APPROVED: { bg: '#f0fff4', color: '#38a169' },
+  REJECTED: { bg: '#fff5f5', color: '#e53e3e' },
+}
 
 interface PerformanceStats { reviews: number; approvals: number; approvalRate: number }
 
@@ -108,6 +137,62 @@ export default function Profile() {
   const [devices, setDevices] = useState<DeviceEntry[]>([])
   const [performanceStats, setPerformanceStats] = useState<PerformanceStats>({ reviews: 0, approvals: 0, approvalRate: 0 })
 
+  const [myChangeRequests, setMyChangeRequests] = useState<ChangeRequestEntry[]>([])
+  const [pendingChangeRequests, setPendingChangeRequests] = useState<ChangeRequestEntry[]>([])
+  const [crFieldName, setCrFieldName] = useState(EDITABLE_FIELDS[0].value)
+  const [crRequestedValue, setCrRequestedValue] = useState('')
+  const [crReason, setCrReason] = useState('')
+  const [crSubmitting, setCrSubmitting] = useState(false)
+  const [crError, setCrError] = useState('')
+  const [crReviewingId, setCrReviewingId] = useState<string | null>(null)
+
+  const refreshMyChangeRequests = () => api.get<ChangeRequestEntry[]>('/change-requests/mine').then(setMyChangeRequests).catch(() => {})
+  const refreshPendingChangeRequests = () => api.get<ChangeRequestEntry[]>('/change-requests').then(setPendingChangeRequests).catch(() => {})
+
+  const handleSubmitChangeRequest = async () => {
+    setCrError('')
+    if (!crRequestedValue.trim() || !crReason.trim()) {
+      setCrError('Please fill in both the new value and a reason.')
+      return
+    }
+    if (crSubmitting) return
+    setCrSubmitting(true)
+    try {
+      await api.post('/change-requests', { fieldName: crFieldName, requestedValue: crRequestedValue.trim(), reason: crReason.trim() })
+      setCrRequestedValue('')
+      setCrReason('')
+      await refreshMyChangeRequests()
+    } catch (err) {
+      setCrError(apiErrorMessage(err, 'Could not submit the request. Please try again.'))
+    } finally {
+      setCrSubmitting(false)
+    }
+  }
+
+  const handleApproveChangeRequest = async (id: string) => {
+    setCrReviewingId(id)
+    try {
+      await api.patch(`/change-requests/${id}/approve`)
+      await refreshPendingChangeRequests()
+    } catch {
+      // best-effort — the row simply stays in the pending list so the admin can retry
+    } finally {
+      setCrReviewingId(null)
+    }
+  }
+
+  const handleRejectChangeRequest = async (id: string) => {
+    setCrReviewingId(id)
+    try {
+      await api.patch(`/change-requests/${id}/reject`, {})
+      await refreshPendingChangeRequests()
+    } catch {
+      // best-effort — the row simply stays in the pending list so the admin can retry
+    } finally {
+      setCrReviewingId(null)
+    }
+  }
+
   useEffect(() => {
     setRole(getRole())
   }, [])
@@ -129,7 +214,13 @@ export default function Profile() {
     api.get<Partial<typeof dataToggles>>('/me/privacy-settings')
       .then((settings) => setDataToggles((prev) => ({ ...prev, ...settings })))
       .catch(() => {}) // endpoint depends on a migration that may not be applied yet — keep local defaults
+    refreshMyChangeRequests()
   }, [])
+
+  useEffect(() => {
+    if (role !== 'admin') return
+    refreshPendingChangeRequests()
+  }, [role])
 
   const [signatureImage, setSignatureImage] = useState<string | null>(null)
   const [signatureSaving, setSignatureSaving] = useState(false)
@@ -402,7 +493,7 @@ export default function Profile() {
               initial="hidden"
               animate="visible"
               onClick={handleAdminBack}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2b6cb0', fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase', padding: 0, marginBottom: 20 }}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2b6cb0', fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase', padding: 0, minHeight: 44, marginBottom: 20 }}
             >
               <ChevronLeft size={16} /> {adminBackLabel}
             </motion.button>
@@ -412,7 +503,7 @@ export default function Profile() {
                 <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginBottom: 16 }}>
                   {drawMode ? (
                     <>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, textAlign: 'center' }}>Draw your signature below</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, textAlign: 'center' }}>Draw your signature below</div>
                       <canvas
                         ref={canvasRef}
                         width={300}
@@ -424,11 +515,11 @@ export default function Profile() {
                         style={{ display: 'block', width: 300, height: 140, maxWidth: '100%', margin: '0 auto 14px', background: '#f8fafc', borderRadius: 14, border: '1px dashed #cbd5e0', touchAction: 'none' }}
                       />
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <button onClick={clearCanvas} style={{ flex: 1, padding: '13px 0', background: '#fff', color: '#1f3151', border: '1px solid #e2e8f0', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Clear</button>
+                        <button onClick={clearCanvas} style={{ flex: 1, padding: '13px 0', minHeight: 44, background: '#fff', color: '#1f3151', border: '1px solid #e2e8f0', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Clear</button>
                         <button
                           onClick={saveDrawing}
                           disabled={!hasDrawn || signatureSaving}
-                          style={{ flex: 1, padding: '13px 0', background: hasDrawn ? '#008d46' : '#a0e0bc', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: hasDrawn ? 'pointer' : 'not-allowed', opacity: signatureSaving ? 0.75 : 1 }}
+                          style={{ flex: 1, padding: '13px 0', minHeight: 44, background: hasDrawn ? '#008d46' : '#a0e0bc', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: hasDrawn ? 'pointer' : 'not-allowed', opacity: signatureSaving ? 0.75 : 1 }}
                         >
                           {signatureSaving ? 'Saving…' : 'Save Signature'}
                         </button>
@@ -445,15 +536,15 @@ export default function Profile() {
                         )}
                       </div>
                       {signatureError && (
-                        <p style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginTop: -8, marginBottom: 12, textAlign: 'center' }}>{signatureError}</p>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginTop: -8, marginBottom: 12, textAlign: 'center' }}>{signatureError}</p>
                       )}
                       <div style={{ display: 'flex', gap: 10, marginBottom: signatureImage ? 10 : 0 }}>
-                        <button onClick={openDrawPad} disabled={signatureSaving} style={{ flex: 1, padding: '13px 0', background: '#fff', color: '#1f3151', border: '1px solid #e2e8f0', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>{signatureImage ? 'Redraw' : 'Draw'}</button>
-                        <button onClick={() => signatureFileRef.current?.click()} disabled={signatureSaving} style={{ flex: 1, padding: '13px 0', background: '#2b6cb0', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>{signatureSaving ? 'Saving…' : signatureImage ? 'Replace' : 'Upload'}</button>
+                        <button onClick={openDrawPad} disabled={signatureSaving} style={{ flex: 1, padding: '13px 0', minHeight: 44, background: '#fff', color: '#1f3151', border: '1px solid #e2e8f0', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>{signatureImage ? 'Redraw' : 'Draw'}</button>
+                        <button onClick={() => signatureFileRef.current?.click()} disabled={signatureSaving} style={{ flex: 1, padding: '13px 0', minHeight: 44, background: '#2b6cb0', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>{signatureSaving ? 'Saving…' : signatureImage ? 'Replace' : 'Upload'}</button>
                         <input ref={signatureFileRef} type="file" accept="image/png" style={{ display: 'none' }} onChange={handleSignatureFile} />
                       </div>
                       {signatureImage && (
-                        <button onClick={deleteSignature} disabled={signatureSaving} style={{ width: '100%', padding: '13px 0', background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Delete Signature</button>
+                        <button onClick={deleteSignature} disabled={signatureSaving} style={{ width: '100%', padding: '13px 0', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Delete Signature</button>
                       )}
                     </>
                   )}
@@ -461,7 +552,7 @@ export default function Profile() {
 
                 <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', gap: 10, background: '#fffaf0', border: '1px solid #feebc8', borderRadius: 14, padding: 14 }}>
                   <Info size={16} color="#dd8b3a" strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#b7791f', lineHeight: 1.5, textTransform: 'uppercase', letterSpacing: '0.01em' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#b7791f', lineHeight: 1.5, textTransform: 'uppercase', letterSpacing: '0.01em' }}>
                     Your signature will be applied automatically to all approved medical clearance
                   </span>
                 </motion.div>
@@ -485,7 +576,7 @@ export default function Profile() {
                     </div>
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151' }}>{row.label}</div>
-                      <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>{row.subtitle}</div>
+                      <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{row.subtitle}</div>
                     </div>
                     <ChevronRight size={18} color="#cbd5e0" />
                   </motion.button>
@@ -504,7 +595,7 @@ export default function Profile() {
                   { label: 'Confirm New Password', value: confirmPassword, onChange: setConfirmPassword },
                 ].map(f => (
                   <div key={f.label} style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>{f.label}</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>{f.label}</label>
                     <input
                       type="password"
                       value={f.value}
@@ -515,18 +606,18 @@ export default function Profile() {
                   </div>
                 ))}
                 {pwAttempted && pwErrorMessage && (
-                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
+                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
                     {pwErrorMessage}
                   </motion.p>
                 )}
                 {pwAttempted && !pwErrorMessage && pwServerError && (
-                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
+                  <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
                     {pwServerError}
                   </motion.p>
                 )}
                 <button
                   onClick={() => handleUpdatePassword()}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                 >
                   <AnimatePresence mode="wait">
                     {pwSaved
@@ -543,14 +634,14 @@ export default function Profile() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', marginBottom: 4 }}>Enable Two-Factor Authentication</div>
-                    <div style={{ fontSize: 11, color: '#a0aec0', lineHeight: 1.5 }}>Require a one-time verification code in addition to your password when signing in.</div>
+                    <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.5 }}>Require a one-time verification code in addition to your password when signing in.</div>
                   </div>
                   <ToggleSwitch checked={twoFactorEnabled} onChange={() => setTwoFactorEnabled(v => !v)} />
                 </div>
                 {twoFactorEnabled && (
                   <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', gap: 10, background: '#f0fff4', border: '1px solid #c6f6d5', borderRadius: 14, padding: 14, marginTop: 16 }}>
                     <Check size={16} color="#008d46" strokeWidth={2.5} style={{ flexShrink: 0, marginTop: 1 }} />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#2f855a', lineHeight: 1.5 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#2f855a', lineHeight: 1.5 }}>
                       Verification codes will be sent to your registered device on every new sign-in.
                     </span>
                   </motion.div>
@@ -571,16 +662,57 @@ export default function Profile() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#1f3151' }}>{entry.device}</div>
-                        <div style={{ fontSize: 10, color: '#a0aec0', marginTop: 2 }}>{entry.ip ?? 'Unknown IP'} • {formatRelativeTime(entry.time)}</div>
+                        <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{entry.ip ?? 'Unknown IP'} • {formatRelativeTime(entry.time)}</div>
                       </div>
                       {entry.current && (
-                        <span style={{ fontSize: 9, fontWeight: 800, color: '#008d46', background: '#e6f9ee', borderRadius: 999, padding: '4px 8px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Current</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: '#008d46', background: '#e6f9ee', borderRadius: 999, padding: '4px 8px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Current</span>
                       )}
                     </div>
                   ))}
                   {loginHistoryEntries.length === 0 && (
                     <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 12, padding: '20px 0' }}>No sign-ins recorded yet.</div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {adminView === 'changeRequests' && (
+              <div>
+                <p style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.6, marginBottom: 16 }}>
+                  Staff-submitted requests to change a field that isn't self-service editable.
+                </p>
+                {pendingChangeRequests.length === 0 && (
+                  <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 12, padding: '20px 0' }}>No pending requests.</div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {pendingChangeRequests.map(cr => {
+                    const fieldLabel = EDITABLE_FIELDS.find(f => f.value === cr.fieldName)?.label ?? cr.fieldName
+                    const reviewing = crReviewingId === cr.id
+                    return (
+                      <div key={cr.id} style={{ background: '#fff', borderRadius: 16, padding: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', marginBottom: 2 }}>{cr.employee?.fullName}</div>
+                        <div style={{ fontSize: 12, color: '#a0aec0', marginBottom: 8 }}>{cr.employee?.employeeId} • {fieldLabel}</div>
+                        <div style={{ fontSize: 12, color: '#1f3151', marginBottom: 4 }}>{cr.currentValue ?? '—'} → <strong>{cr.requestedValue}</strong></div>
+                        <div style={{ fontSize: 12, color: '#718096', marginBottom: 12 }}>&ldquo;{cr.reason}&rdquo;</div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button
+                            onClick={() => handleRejectChangeRequest(cr.id)}
+                            disabled={reviewing}
+                            style={{ flex: 1, padding: '10px 0', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
+                          >
+                            Reject
+                          </button>
+                          <button
+                            onClick={() => handleApproveChangeRequest(cr.id)}
+                            disabled={reviewing}
+                            style={{ flex: 1, padding: '10px 0', minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
+                          >
+                            {reviewing ? 'Saving…' : 'Approve'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -600,7 +732,7 @@ export default function Profile() {
                 {adminStats.map(s => (
                   <div key={s.label} style={{ textAlign: 'center' }}>
                     <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 18, fontWeight: 800, color: s.color, marginBottom: 4 }}>{s.value}</div>
-                    <div style={{ fontSize: 9, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
                   </div>
                 ))}
               </div>
@@ -608,12 +740,12 @@ export default function Profile() {
           ) : (
             <>
               <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', marginBottom: 8 }}>{displayName}</div>
-              <span style={{ background: '#e6f9ee', color: '#008d46', borderRadius: 999, padding: '5px 14px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 20 }}>{jobTitle}</span>
+              <span style={{ background: '#e6f9ee', color: '#008d46', borderRadius: 999, padding: '5px 14px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 20 }}>{jobTitle}</span>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', width: '100%', gap: 8, marginBottom: 20 }}>
                 {[{ label: 'Birthday', value: formatBirthDate(birthDate) }, { label: 'Age', value: calculateAge(birthDate) }, { label: 'Staff ID', value: employeeId }].map(f => (
                   <div key={f.label} style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 9, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{f.label}</div>
+                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{f.label}</div>
                     <div style={{ fontSize: 12, fontWeight: 800, color: '#1f3151' }}>{f.value}</div>
                   </div>
                 ))}
@@ -623,14 +755,14 @@ export default function Profile() {
 
           <button
             onClick={handleLogout}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 0', background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 0', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}
           >
             <LogOut size={14} strokeWidth={2.5} /> Logout From Session
           </button>
         </motion.div>
 
         {role === 'admin' && (
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#a0aec0', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 }}>Management</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 }}>Management</div>
         )}
 
         {(role === 'admin' ? adminMenuRows : mobileMenuRows).map((row, i) => (
@@ -663,7 +795,7 @@ export default function Profile() {
               <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 24 }}>
                 <button
                   onClick={handleAdminBackDesktop}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2b6cb0', fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase', padding: 0 }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2b6cb0', fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase', padding: 0, minHeight: 44 }}
                 >
                   <ChevronLeft size={16} /> {adminBackLabelDesktop}
                 </button>
@@ -690,13 +822,13 @@ export default function Profile() {
                         <Activity size={20} color="#2b6cb0" />
                         <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>PERFORMANCE<br/>OVERVIEW</span>
                       </div>
-                      <span style={{ color: '#a0aec0', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>ALL<br/>TIME</span>
+                      <span style={{ color: '#a0aec0', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>ALL<br/>TIME</span>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                       {adminStats.map(s => (
                         <div key={s.label} style={{ textAlign: 'center' }}>
                           <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: s.color, marginBottom: 4 }}>{s.value}</div>
-                          <div style={{ fontSize: 9, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+                          <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
                         </div>
                       ))}
                     </div>
@@ -713,7 +845,7 @@ export default function Profile() {
                   <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: 32, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginBottom: 24 }}>
                     {drawMode ? (
                       <>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 14, textAlign: 'center' }}>Draw your signature below</div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 14, textAlign: 'center' }}>Draw your signature below</div>
                         <canvas
                           ref={canvasRef}
                           width={480}
@@ -725,11 +857,11 @@ export default function Profile() {
                           style={{ display: 'block', width: '100%', maxWidth: 480, height: 200, margin: '0 auto 20px', background: '#f8fafc', borderRadius: 16, border: '1px dashed #cbd5e0', touchAction: 'none' }}
                         />
                         <div style={{ display: 'flex', gap: 12, maxWidth: 320, margin: '0 auto' }}>
-                          <button onClick={clearCanvas} style={{ flex: 1, padding: '13px 0', background: '#fff', color: '#1f3151', border: '1px solid #e2e8f0', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Clear</button>
+                          <button onClick={clearCanvas} style={{ flex: 1, padding: '13px 0', minHeight: 44, background: '#fff', color: '#1f3151', border: '1px solid #e2e8f0', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Clear</button>
                           <button
                             onClick={saveDrawing}
                             disabled={!hasDrawn || signatureSaving}
-                            style={{ flex: 1, padding: '13px 0', background: hasDrawn ? '#008d46' : '#a0e0bc', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: hasDrawn ? 'pointer' : 'not-allowed', opacity: signatureSaving ? 0.75 : 1 }}
+                            style={{ flex: 1, padding: '13px 0', minHeight: 44, background: hasDrawn ? '#008d46' : '#a0e0bc', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: hasDrawn ? 'pointer' : 'not-allowed', opacity: signatureSaving ? 0.75 : 1 }}
                           >
                             {signatureSaving ? 'Saving…' : 'Save Signature'}
                           </button>
@@ -746,16 +878,16 @@ export default function Profile() {
                           )}
                         </div>
                         {signatureError && (
-                          <p style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginTop: -10, marginBottom: 14, textAlign: 'center' }}>{signatureError}</p>
+                          <p style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginTop: -10, marginBottom: 14, textAlign: 'center' }}>{signatureError}</p>
                         )}
                         <div style={{ display: 'flex', gap: 12, maxWidth: 320, margin: signatureImage ? '0 auto 12px' : '0 auto' }}>
-                          <button onClick={openDrawPad} disabled={signatureSaving} style={{ flex: 1, padding: '13px 0', background: '#fff', color: '#1f3151', border: '1px solid #e2e8f0', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>{signatureImage ? 'Redraw' : 'Draw'}</button>
-                          <button onClick={() => signatureFileRef.current?.click()} disabled={signatureSaving} style={{ flex: 1, padding: '13px 0', background: '#2b6cb0', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>{signatureSaving ? 'Saving…' : signatureImage ? 'Replace' : 'Upload'}</button>
+                          <button onClick={openDrawPad} disabled={signatureSaving} style={{ flex: 1, padding: '13px 0', minHeight: 44, background: '#fff', color: '#1f3151', border: '1px solid #e2e8f0', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>{signatureImage ? 'Redraw' : 'Draw'}</button>
+                          <button onClick={() => signatureFileRef.current?.click()} disabled={signatureSaving} style={{ flex: 1, padding: '13px 0', minHeight: 44, background: '#2b6cb0', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>{signatureSaving ? 'Saving…' : signatureImage ? 'Replace' : 'Upload'}</button>
                           <input ref={signatureFileRef} type="file" accept="image/png" style={{ display: 'none' }} onChange={handleSignatureFile} />
                         </div>
                         {signatureImage && (
                           <div style={{ maxWidth: 320, margin: '0 auto' }}>
-                            <button onClick={deleteSignature} disabled={signatureSaving} style={{ width: '100%', padding: '13px 0', background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Delete Signature</button>
+                            <button onClick={deleteSignature} disabled={signatureSaving} style={{ width: '100%', padding: '13px 0', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Delete Signature</button>
                           </div>
                         )}
                       </>
@@ -813,13 +945,13 @@ export default function Profile() {
                           { label: 'New Password', value: newPassword, onChange: setNewPassword },
                         ].map(f => (
                           <div key={f.label}>
-                            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>{f.label}</label>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>{f.label}</label>
                             <input type="password" value={f.value} onChange={e => f.onChange(e.target.value)} placeholder="••••••••" style={inputStyle} onFocus={focusInput} onBlur={blurInput} />
                           </div>
                         ))}
                       </div>
                       <div style={{ marginBottom: 24, maxWidth: 320 }}>
-                        <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>Confirm New Password</label>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>Confirm New Password</label>
                         <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" style={inputStyle} onFocus={focusInput} onBlur={blurInput} />
                       </div>
                       {pwAttempted && pwErrorMessage && (
@@ -834,7 +966,7 @@ export default function Profile() {
                       )}
                       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                         <motion.button onClick={() => handleUpdatePassword(() => { setAdminView(null); setAdminPrivacyView('list') })} whileHover={{ filter: 'brightness(1.1)', y: -1 }} whileTap={{ scale: 0.97 }}
-                          style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', minWidth: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                          style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', minHeight: 44, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', minWidth: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                         >
                           <AnimatePresence mode="wait">
                             {pwSaved
@@ -880,10 +1012,10 @@ export default function Profile() {
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151' }}>{entry.device}</div>
-                              <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>{entry.ip ?? 'Unknown IP'} • {formatRelativeTime(entry.time)}</div>
+                              <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{entry.ip ?? 'Unknown IP'} • {formatRelativeTime(entry.time)}</div>
                             </div>
                             {entry.current && (
-                              <span style={{ fontSize: 10, fontWeight: 800, color: '#008d46', background: '#e6f9ee', borderRadius: 999, padding: '5px 10px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Current</span>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: '#008d46', background: '#e6f9ee', borderRadius: 999, padding: '5px 10px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Current</span>
                             )}
                           </div>
                         ))}
@@ -893,6 +1025,53 @@ export default function Profile() {
                       </div>
                     </motion.div>
                   )}
+                </>
+              )}
+
+              {adminView === 'changeRequests' && (
+                <>
+                  <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 24 }}>
+                    <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>Change Requests</h1>
+                    <p style={{ fontSize: 13, color: '#718096', margin: 0 }}>Staff-submitted requests to change a field that isn&apos;t self-service editable.</p>
+                  </motion.div>
+
+                  <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: 32, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    {pendingChangeRequests.length === 0 && (
+                      <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 14, padding: '40px 0' }}>No pending requests.</div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                      {pendingChangeRequests.map(cr => {
+                        const fieldLabel = EDITABLE_FIELDS.find(f => f.value === cr.fieldName)?.label ?? cr.fieldName
+                        const reviewing = crReviewingId === cr.id
+                        return (
+                          <div key={cr.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 16, background: '#f8fafc' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', marginBottom: 4 }}>{cr.employee?.fullName}</div>
+                              <div style={{ fontSize: 12, color: '#a0aec0', marginBottom: 8 }}>{cr.employee?.employeeId} • {fieldLabel}</div>
+                              <div style={{ fontSize: 13, color: '#1f3151', marginBottom: 4 }}>{cr.currentValue ?? '—'} → <strong>{cr.requestedValue}</strong></div>
+                              <div style={{ fontSize: 12, color: '#718096' }}>&ldquo;{cr.reason}&rdquo;</div>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+                              <button
+                                onClick={() => handleRejectChangeRequest(cr.id)}
+                                disabled={reviewing}
+                                style={{ padding: '10px 20px', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
+                              >
+                                Reject
+                              </button>
+                              <button
+                                onClick={() => handleApproveChangeRequest(cr.id)}
+                                disabled={reviewing}
+                                style={{ padding: '10px 20px', minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
+                              >
+                                {reviewing ? 'Saving…' : 'Approve'}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </motion.div>
                 </>
               )}
                 </div>
@@ -926,13 +1105,13 @@ export default function Profile() {
                         <Activity size={20} color="#2b6cb0" />
                         <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>PERFORMANCE<br/>OVERVIEW</span>
                       </div>
-                      <span style={{ color: '#a0aec0', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>ALL<br/>TIME</span>
+                      <span style={{ color: '#a0aec0', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>ALL<br/>TIME</span>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                       {adminStats.map(s => (
                         <div key={s.label} style={{ textAlign: 'center' }}>
                           <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: s.color, marginBottom: 4 }}>{s.value}</div>
-                          <div style={{ fontSize: 9, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+                          <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
                         </div>
                       ))}
                     </div>
@@ -957,7 +1136,7 @@ export default function Profile() {
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, color: '#718096', lineHeight: 1.6, marginBottom: 16 }}>Applied automatically to all approved medical clearances.</div>
                         <motion.button onClick={() => setAdminView('signature')} whileHover={{ filter: 'brightness(1.1)', y: -1 }} whileTap={{ scale: 0.97 }}
-                          style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer' }}
+                          style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer' }}
                         >
                           Manage Signature
                         </motion.button>
@@ -989,6 +1168,22 @@ export default function Profile() {
                         </button>
                       ))}
                     </div>
+                  </motion.div>
+
+                  <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                      <FileEdit size={18} color="#805ad5" />
+                      <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>CHANGE REQUESTS</span>
+                      {pendingChangeRequests.length > 0 && (
+                        <span style={{ background: '#fffbea', color: '#b7791f', borderRadius: 999, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{pendingChangeRequests.length} pending</span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 13, color: '#718096', lineHeight: 1.6, marginBottom: 16 }}>Staff-submitted requests to change a field that isn&apos;t self-service editable.</div>
+                    <motion.button onClick={() => setAdminView('changeRequests')} whileHover={{ filter: 'brightness(1.1)', y: -1 }} whileTap={{ scale: 0.97 }}
+                      style={{ background: '#805ad5', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer' }}
+                    >
+                      Review Requests
+                    </motion.button>
                   </motion.div>
                 </div>
               </div>
@@ -1022,19 +1217,28 @@ export default function Profile() {
                   <Activity size={20} color="#008d46" />
                   <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>ACTIVITY<br/>LOGS</span>
                 </div>
-                <span style={{ color: '#a0aec0', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>INTERACTIVE<br/>LOG</span>
+                <span style={{ color: '#a0aec0', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>INTERACTIVE<br/>LOG</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {activityLogs.map((log, i) => (
+                {activityLogs.slice(0, 5).map((log, i) => (
                   <motion.div key={i} custom={i + 3} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', gap: 12 }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#008d46', flexShrink: 0, marginTop: 6 }} />
                     <div>
                       <div style={{ fontFamily: 'Public Sans,sans-serif', fontSize: 14, fontWeight: 700, color: '#1f3151', marginBottom: 4, lineHeight: 1.3 }}>{log.title}</div>
-                      <div style={{ fontSize: 11, color: '#a0aec0', lineHeight: 1.5 }}>{formatLogTime(log.time)} · IP:<br/>{log.ip ?? 'Unknown'}</div>
+                      <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.5 }}>{formatLogTime(log.time)} · IP:<br/>{log.ip ?? 'Unknown'}</div>
                     </div>
                   </motion.div>
                 ))}
               </div>
+              {activityLogs.length > 5 && (
+                <motion.button
+                  onClick={() => setActiveModal('activity')}
+                  whileHover={{ x: 2 }}
+                  style={{ width: '100%', background: 'none', border: 'none', borderTop: '1px solid #e2e8f0', marginTop: 20, paddingTop: 16, cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  View All {activityLogs.length} →
+                </motion.button>
+              )}
             </motion.div>
           </div>
 
@@ -1047,13 +1251,13 @@ export default function Profile() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5" style={{ marginBottom: 20 }}>
                 {[{ label: 'DISPLAY NAME', value: displayName, onChange: setDisplayName }, { label: 'EMAIL ADDRESS', value: email, onChange: setEmail }].map(f => (
                   <div key={f.label}>
-                    <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>{f.label}</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>{f.label}</label>
                     <input value={f.value} onChange={e => f.onChange(e.target.value)} style={inputStyle} onFocus={focusInput} onBlur={blurInput} />
                   </div>
                 ))}
               </div>
               <div style={{ marginBottom: 28 }}>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>OFFICE PHONE / MOBILE NO.</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>OFFICE PHONE / MOBILE NO.</label>
                 <input value={phone} onChange={e => setPhone(e.target.value)} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} onFocus={focusInput} onBlur={blurInput} />
               </div>
               {saveError && (
@@ -1093,7 +1297,7 @@ export default function Profile() {
                       <motion.button
                         onClick={() => { setActiveModal('privacy'); setPrivacyView(view) }}
                         whileHover={{ x: -2 }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0, textAlign: 'center', lineHeight: 1.3 }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0, textAlign: 'center', lineHeight: 1.3, minHeight: 44, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
                       >
                         {actionLines.map((line, idx) => <div key={idx}>{line}</div>)}
                       </motion.button>
@@ -1101,6 +1305,19 @@ export default function Profile() {
                   );
                 })}
               </div>
+            </motion.div>
+
+            <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+                <FileEdit size={18} color="#805ad5" />
+                <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>REQUEST A CHANGE</span>
+              </div>
+              <div style={{ fontSize: 13, color: '#718096', lineHeight: 1.6, marginBottom: 16 }}>Job title, birth date, employment status, and department require admin approval — submit a request and track its status here.</div>
+              <motion.button onClick={() => setActiveModal('changeRequests')} whileHover={{ filter: 'brightness(1.1)', y: -1 }} whileTap={{ scale: 0.97 }}
+                style={{ background: '#805ad5', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer' }}
+              >
+                Request a Change
+              </motion.button>
             </motion.div>
           </div>
         </div>
@@ -1132,7 +1349,7 @@ export default function Profile() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {activeModal === 'privacy' && privacyView !== 'list' && (
-                    <button onClick={() => setPrivacyView('list')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', padding: 4, marginLeft: -4, display: 'flex' }}>
+                    <button onClick={() => setPrivacyView('list')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', width: 44, height: 44, marginLeft: -12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <ChevronLeft size={18} />
                     </button>
                   )}
@@ -1140,9 +1357,10 @@ export default function Profile() {
                     {activeModal === 'activity' && 'ACTIVITY LOGS'}
                     {activeModal === 'privacy' && privacyViewTitle[privacyView]}
                     {activeModal === 'account' && 'ACCOUNT SETTINGS'}
+                    {activeModal === 'changeRequests' && 'REQUEST A CHANGE'}
                   </span>
                 </div>
-                <button onClick={closeModal} style={{ width: 28, height: 28, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                <button onClick={closeModal} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
                   <X size={14} />
                 </button>
               </div>
@@ -1154,7 +1372,7 @@ export default function Profile() {
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#008d46', flexShrink: 0, marginTop: 5 }} />
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', marginBottom: 3 }}>{log.title}</div>
-                        <div style={{ fontSize: 11, color: '#a0aec0' }}>{formatLogTime(log.time)}</div>
+                        <div style={{ fontSize: 12, color: '#a0aec0' }}>{formatLogTime(log.time)}</div>
                       </div>
                     </div>
                   ))}
@@ -1187,7 +1405,7 @@ export default function Profile() {
                     { label: 'Confirm New PIN', value: confirmPin, onChange: handlePinInput(setConfirmPin) },
                   ].map(f => (
                     <div key={f.label} style={{ marginBottom: 16 }}>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>{f.label}</label>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>{f.label}</label>
                       <input
                         type="password"
                         inputMode="numeric"
@@ -1199,18 +1417,18 @@ export default function Profile() {
                     </div>
                   ))}
                   {pinAttempted && pinErrorMessage && (
-                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
+                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
                       {pinErrorMessage}
                     </motion.p>
                   )}
                   {pinAttempted && !pinErrorMessage && pinServerError && (
-                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
+                    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
                       {pinServerError}
                     </motion.p>
                   )}
                   <button
                     onClick={handleUpdatePin}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                   >
                     <AnimatePresence mode="wait">
                       {pinSaved
@@ -1235,12 +1453,12 @@ export default function Profile() {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#1f3151' }}>{d.name}</div>
-                          <div style={{ fontSize: 10, color: '#a0aec0', marginTop: 2 }}>{d.deviceType ?? 'Device'} • {formatRelativeTime(d.lastActive)}</div>
+                          <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{d.deviceType ?? 'Device'} • {formatRelativeTime(d.lastActive)}</div>
                         </div>
                         {d.isCurrent ? (
-                          <span style={{ fontSize: 9, fontWeight: 800, color: '#008d46', background: '#e6f9ee', borderRadius: 999, padding: '4px 8px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>This Device</span>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: '#008d46', background: '#e6f9ee', borderRadius: 999, padding: '4px 8px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>This Device</span>
                         ) : (
-                          <button onClick={() => removeDevice(d.id)} style={{ fontSize: 10, fontWeight: 800, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0 }}>Remove</button>
+                          <button onClick={() => removeDevice(d.id)} style={{ fontSize: 12, fontWeight: 800, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0, minHeight: 44, padding: '0 4px', display: 'flex', alignItems: 'center' }}>Remove</button>
                         )}
                       </div>
                     ))}
@@ -1261,7 +1479,7 @@ export default function Profile() {
                       <div key={opt.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0', borderTop: i > 0 ? '1px solid #e2e8f0' : 'none' }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', marginBottom: 2 }}>{opt.label}</div>
-                          <div style={{ fontSize: 11, color: '#a0aec0', lineHeight: 1.4 }}>{opt.desc}</div>
+                          <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.4 }}>{opt.desc}</div>
                         </div>
                         <ToggleSwitch checked={dataToggles[opt.key]} onChange={() => toggleDataPrivacy(opt.key)} />
                       </div>
@@ -1278,7 +1496,7 @@ export default function Profile() {
                     { label: 'Mobile Number', value: phone, onChange: setPhone },
                   ].map(f => (
                     <div key={f.label} style={{ marginBottom: 16 }}>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>{f.label}</label>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>{f.label}</label>
                       <input
                         value={f.value}
                         onChange={e => f.onChange(e.target.value)}
@@ -1287,11 +1505,11 @@ export default function Profile() {
                     </div>
                   ))}
                   {saveError && (
-                    <p style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginBottom: 12 }}>{saveError}</p>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 12 }}>{saveError}</p>
                   )}
                   <button
                     onClick={handleSave}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}
                   >
                     <AnimatePresence mode="wait">
                       {saved
@@ -1300,6 +1518,78 @@ export default function Profile() {
                       }
                     </AnimatePresence>
                   </button>
+                </div>
+              )}
+
+              {activeModal === 'changeRequests' && (
+                <div>
+                  <p style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.6, marginBottom: 16 }}>
+                    Job title, birth date, employment status, and department require admin approval before they take effect — everything else on Account Security applies immediately.
+                  </p>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>Field</label>
+                    <select
+                      value={crFieldName}
+                      onChange={e => setCrFieldName(e.target.value)}
+                      style={{ width: '100%', padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 13, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
+                    >
+                      {EDITABLE_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+                    </select>
+                  </div>
+
+                  <div style={{ marginBottom: 12 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>New Value</label>
+                    <input
+                      type={crFieldName === 'birth_date' ? 'date' : 'text'}
+                      value={crRequestedValue}
+                      onChange={e => setCrRequestedValue(e.target.value)}
+                      placeholder={crFieldName === 'department_code' ? 'e.g. RAD' : ''}
+                      style={{ width: '100%', padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 13, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>Reason</label>
+                    <textarea
+                      value={crReason}
+                      onChange={e => setCrReason(e.target.value)}
+                      placeholder="Why does this need to change?"
+                      rows={2}
+                      style={{ width: '100%', padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 13, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', outline: 'none', resize: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
+                    />
+                  </div>
+
+                  {crError && <p style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 12 }}>{crError}</p>}
+
+                  <button
+                    onClick={handleSubmitChangeRequest}
+                    disabled={crSubmitting}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: crSubmitting ? 'default' : 'pointer', opacity: crSubmitting ? 0.75 : 1, marginBottom: 20 }}
+                  >
+                    {crSubmitting ? 'Submitting…' : 'Submit Request'}
+                  </button>
+
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Your Requests</div>
+                  {myChangeRequests.length === 0 && (
+                    <div style={{ fontSize: 12, color: '#a0aec0', textAlign: 'center', padding: '16px 0' }}>No requests yet.</div>
+                  )}
+                  {myChangeRequests.map(cr => {
+                    const statusStyle = changeRequestStatusStyle[cr.status]
+                    const fieldLabel = EDITABLE_FIELDS.find(f => f.value === cr.fieldName)?.label ?? cr.fieldName
+                    return (
+                      <div key={cr.id} style={{ background: '#f8fafc', borderRadius: 12, padding: '12px 14px', marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#1f3151' }}>{fieldLabel}</span>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: statusStyle.color, background: statusStyle.bg, borderRadius: 999, padding: '2px 10px', textTransform: 'uppercase' }}>{cr.status}</span>
+                        </div>
+                        <div style={{ fontSize: 12, color: '#718096' }}>{cr.currentValue ?? '—'} → {cr.requestedValue}</div>
+                        {cr.status === 'REJECTED' && cr.reviewNotes && (
+                          <div style={{ fontSize: 12, color: '#e53e3e', marginTop: 4 }}>Reason: {cr.reviewNotes}</div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </motion.div>

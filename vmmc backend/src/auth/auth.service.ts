@@ -13,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { validateEmployeeId } from '../common/assert-access';
 import { describeUserAgent } from '../common/describe-user-agent';
 import { EmailChannel } from '../notifications/channels/email.channel';
+import { buildOtpEmail } from '../notifications/email-templates/otp.template';
 import { SupabaseService } from '../supabase/supabase.service';
 import { Role } from './types/role';
 
@@ -58,15 +59,22 @@ export class AuthService {
     context: { ipAddress: string | null; userAgent: string | null },
   ) {
     const employee = await this.findEmployeeByEmployeeId(employeeId);
-    if (!employee) throw new UnauthorizedException('Invalid Employee ID or password.');
+    if (!employee) {
+      await this.logLoginFailure(null, context, { employeeId, reason: 'employee_not_found' });
+      throw new UnauthorizedException('Invalid Employee ID or password.');
+    }
 
     const { data, error } = await this.supabaseService.getAnonClient().auth.signInWithPassword({
       email: employee.email,
       password,
     });
-    if (error || !data.session) throw new UnauthorizedException('Invalid Employee ID or password.');
+    if (error || !data.session) {
+      await this.logLoginFailure(employee.id, context, { employeeId, reason: 'invalid_credentials' });
+      throw new UnauthorizedException('Invalid Employee ID or password.');
+    }
 
     if (!PORTAL_ROLES[portal].includes(employee.role)) {
+      await this.logLoginFailure(employee.id, context, { employeeId, reason: 'wrong_portal', portal });
       throw new ForbiddenException('This account is not authorized for the selected portal.');
     }
 
@@ -160,11 +168,13 @@ export class AuthService {
 
     // EmailChannel itself falls back to logging (`[DEV EMAIL] ...`) when SMTP_USER/SMTP_PASSWORD
     // aren't configured, so this is safe to call unconditionally in every environment.
-    await this.emailChannel.send(
-      employee.email,
-      'VMMC TB DOTS — Password reset code',
-      `Your password reset code is ${otp}. It expires in ${OTP_TTL_MINUTES} minutes. If you didn't request this, you can ignore this email.`,
-    );
+    const otpEmail = buildOtpEmail({
+      name: employee.full_name,
+      code: otp,
+      expiresMinutes: OTP_TTL_MINUTES,
+      requestedAt: new Date(),
+    });
+    await this.emailChannel.send(employee.email, otpEmail.subject, otpEmail.text, otpEmail.html);
 
     return { message: 'If that account exists, a code has been sent.' };
   }
@@ -239,6 +249,26 @@ export class AuthService {
       // Token may already be expired/invalid — logout is best-effort either way.
     }
     return { message: 'Logged out.' };
+  }
+
+  /** `actorId` is null when the employee ID itself didn't resolve to anyone — there's no one
+   * to attribute the attempt to, but the attempted ID/reason are still recorded in `after` so
+   * the raw audit trail captures it even though it can never surface in that employee's own
+   * Activity Logs (ActivityService.listActivityLogs filters by actor_id). */
+  private async logLoginFailure(
+    actorId: string | null,
+    context: { ipAddress: string | null; userAgent: string | null },
+    details: Record<string, unknown>,
+  ) {
+    await this.auditService.log({
+      actorId,
+      action: 'LOGIN_FAILED',
+      entityType: 'auth',
+      entityId: actorId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+      after: details,
+    });
   }
 
   /** Upserts a device row for Profile > Manage Devices, keyed on the browser+OS

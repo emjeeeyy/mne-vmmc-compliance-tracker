@@ -5,6 +5,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { ChangeRequestsModule } from './change-requests/change-requests.module';
 import { ComplianceModule } from './compliance/compliance.module';
 import { validate } from './config/env.validation';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -38,6 +39,7 @@ import { TrackingModule } from './tracking/tracking.module';
     DashboardModule,
     ReportsModule,
     TrackingModule,
+    ChangeRequestsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

@@ -86,7 +86,7 @@ function EscalationsCard({ escalations, onAcknowledge, acknowledging }: { escala
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {open.map(esc => (
           <div key={esc.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: '#fff', border: '1px solid #feb2b2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 800, color: '#c53030' }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: '#fff', border: '1px solid #feb2b2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, color: '#c53030' }}>
               {esc.employee.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -94,14 +94,14 @@ function EscalationsCard({ escalations, onAcknowledge, acknowledging }: { escala
               <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2, lineHeight: 1.4 }}>{esc.event.message}</div>
             </div>
             {esc.status === 'ACKNOWLEDGED' ? (
-              <span style={{ background: '#fffbea', color: '#b7791f', borderRadius: 999, padding: '6px 14px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Acknowledged</span>
+              <span style={{ background: '#fffbea', color: '#b7791f', borderRadius: 999, padding: '6px 14px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Acknowledged</span>
             ) : (
               <motion.button
                 onClick={() => onAcknowledge(esc.id)}
                 disabled={acknowledging === esc.id}
                 whileHover={{ filter: 'brightness(1.1)' }}
                 whileTap={{ scale: 0.97 }}
-                style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 700, cursor: acknowledging === esc.id ? 'default' : 'pointer', flexShrink: 0, whiteSpace: 'nowrap', opacity: acknowledging === esc.id ? 0.6 : 1 }}
+                style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', minHeight: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, cursor: acknowledging === esc.id ? 'default' : 'pointer', flexShrink: 0, whiteSpace: 'nowrap', opacity: acknowledging === esc.id ? 0.6 : 1 }}
               >
                 {acknowledging === esc.id ? 'Acknowledging…' : 'Acknowledge'}
               </motion.button>
@@ -161,7 +161,7 @@ function ReportsExportCard() {
               disabled={exporting === report.key}
               whileHover={{ filter: 'brightness(1.1)' }}
               whileTap={{ scale: 0.97 }}
-              style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 700, cursor: exporting === report.key ? 'default' : 'pointer', flexShrink: 0, whiteSpace: 'nowrap', opacity: exporting === report.key ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
+              style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', minHeight: 44, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, cursor: exporting === report.key ? 'default' : 'pointer', flexShrink: 0, whiteSpace: 'nowrap', opacity: exporting === report.key ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             >
               <AnimatePresence mode="wait">
                 {exported === report.key ? (
@@ -236,7 +236,7 @@ function StatCard({ icon: Icon, color, bg, label, value, suffix, index }: StatCa
       <div style={{ width: 44, height: 44, borderRadius: 12, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
         <Icon size={22} color={color} strokeWidth={2.5} />
       </div>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#718096', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#718096', marginBottom: 6 }}>{label}</div>
       <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151' }}>
         {value !== null ? `${count} ${suffix.trim()}` : suffix}
       </div>
@@ -262,7 +262,7 @@ function TrendBars({ data }: { data: MonthlyPoint[] }) {
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         {data.map((d, i) => (
-          <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#a0aec0' }}>{d.label}</div>
+          <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#a0aec0' }}>{d.label}</div>
         ))}
       </div>
     </div>
@@ -341,30 +341,30 @@ export default function Dashboard() {
                 initial="hidden"
                 animate="visible"
                 onClick={() => setShowAnalytics(false)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2b6cb0', fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase', padding: 0, marginBottom: 20 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2b6cb0', fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase', padding: 0, minHeight: 44, marginBottom: 20 }}
               >
                 <ChevronLeft size={16} /> Back to Dashboard
               </motion.button>
 
               <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 16 }}>
                 <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Detailed Analytics</h1>
-                <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Annual Clearance Progress · FY 2026</div>
+                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Annual Clearance Progress · FY 2026</div>
               </motion.div>
 
               <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Annual Clearance Progress</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Annual Clearance Progress</span>
                   <BarChart3 size={18} color="#4299e1" style={{ flexShrink: 0 }} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 20 }}>
                   <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151' }}>{adminData?.annualClearanceProgress.rate ?? 0}%</span>
-                  <span style={{ fontSize: 11, color: '#a0aec0' }}>of FY {new Date().getFullYear()}</span>
+                  <span style={{ fontSize: 12, color: '#a0aec0' }}>of FY {new Date().getFullYear()}</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 120 }}>
                   {adminMonthly.map((d, i) => (
                     <div key={d.label} style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'center' }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>{d.value}%</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>{d.value}%</span>
                       <motion.div
                         initial={{ height: 0 }}
                         animate={{ height: `${(d.value / Math.max(1, adminStats.highest.value)) * 100}%` }}
@@ -376,7 +376,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   {adminMonthly.map(d => (
-                    <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#a0aec0' }}>{d.label}</div>
+                    <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#a0aec0' }}>{d.label}</div>
                   ))}
                 </div>
               </motion.div>
@@ -388,15 +388,15 @@ export default function Dashboard() {
                   { label: 'Lowest', month: adminStats.lowest.label, value: `${adminStats.lowest.value}%`, color: '#e53e3e' },
                 ].map((s, i) => (
                   <motion.div key={s.label} custom={3 + i} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: '14px 12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 9, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</div>
+                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</div>
                     <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
-                    {s.month && <div style={{ fontSize: 9, color: '#a0aec0', fontWeight: 700, marginTop: 2 }}>{s.month}</div>}
+                    {s.month && <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, marginTop: 2 }}>{s.month}</div>}
                   </motion.div>
                 ))}
               </div>
 
               <motion.div custom={6} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 16 }}>Monthly Breakdown</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 16 }}>Monthly Breakdown</div>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   {adminMonthly.map((d, i) => {
                     const prev = i > 0 ? adminMonthly[i - 1].value : null
@@ -406,7 +406,7 @@ export default function Dashboard() {
                         <span style={{ fontSize: 12, fontWeight: 700, color: '#1f3151' }}>{d.label}</span>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           {delta !== null && (
-                            <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, fontWeight: 700, color: delta >= 0 ? '#38a169' : '#e53e3e' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: delta >= 0 ? '#38a169' : '#e53e3e' }}>
                               {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}%
                             </span>
                           )}
@@ -422,17 +422,17 @@ export default function Dashboard() {
           <>
             <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
               <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Hospital Metrics</h1>
-              <span style={{ background: '#ebf8ff', color: '#3182ce', borderRadius: 999, padding: '6px 12px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Live Sync</span>
+              <span style={{ background: '#ebf8ff', color: '#3182ce', borderRadius: 999, padding: '6px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Live Sync</span>
             </motion.div>
 
             <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', borderRadius: 20, padding: 20, color: '#fff', marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#cbd5e0' }}>Hospital Compliance</span>
+                <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#cbd5e0' }}>Hospital Compliance</span>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 14 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800 }}>{adminData?.hospitalCompliance.rate ?? 0}%</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 11, fontWeight: 700, color: (adminData?.hospitalCompliance.trendDelta ?? 0) < 0 ? '#fc8181' : '#68d391' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: (adminData?.hospitalCompliance.trendDelta ?? 0) < 0 ? '#fc8181' : '#68d391' }}>
                   {(adminData?.hospitalCompliance.trendDelta ?? 0) < 0 ? <TrendingDown size={12} /> : <TrendingUp size={12} />} {Math.abs(adminData?.hospitalCompliance.trendDelta ?? 0)}%
                 </span>
               </div>
@@ -441,41 +441,41 @@ export default function Dashboard() {
                   <div style={{ width: `${adminData?.hospitalCompliance.rate ?? 0}%`, height: '100%', background: 'linear-gradient(to right, #4ade80, #00b06b)', borderRadius: 999 }} />
                 </div>
               </div>
-              <div style={{ fontSize: 11, color: '#cbd5e0' }}>Goal: 95% Occupational Safety Standard</div>
+              <div style={{ fontSize: 12, color: '#cbd5e0' }}>Goal: 95% Occupational Safety Standard</div>
             </motion.div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
               <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <Users size={18} color="#4299e1" />
-                <div style={{ fontSize: 10, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Total Personnel</div>
+                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Total Personnel</div>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#2b6cb0', marginTop: 4 }}>{adminData?.totalPersonnel ?? 0}</div>
               </motion.div>
               <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <AlertCircle size={18} color="#e53e3e" />
-                <div style={{ fontSize: 10, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Critical Cases</div>
+                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Critical Cases</div>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#e53e3e', marginTop: 4 }}>{adminData?.criticalCases ?? 0}</div>
               </motion.div>
             </div>
 
             <ReportsExportCard />
 
-            <motion.div custom={4} variants={fadeRise} initial="hidden" animate="visible" style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 12 }}>
+            <motion.div custom={4} variants={fadeRise} initial="hidden" animate="visible" style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 12 }}>
               Hospital Trends
             </motion.div>
 
             <motion.div custom={5} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Annual Clearance Progress</span>
+                <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Annual Clearance Progress</span>
                 <BarChart3 size={18} color="#4299e1" style={{ flexShrink: 0 }} />
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 16 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151' }}>{adminData?.annualClearanceProgress.rate ?? 0}%</span>
-                <span style={{ fontSize: 11, color: '#a0aec0' }}>of FY {new Date().getFullYear()}</span>
+                <span style={{ fontSize: 12, color: '#a0aec0' }}>of FY {new Date().getFullYear()}</span>
               </div>
               <TrendBars data={adminMonthly} />
               <button
                 onClick={() => setShowAnalytics(true)}
-                style={{ width: '100%', marginTop: 20, padding: '14px 0', background: '#111827', color: '#fff', border: 'none', borderRadius: 12, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}
+                style={{ width: '100%', marginTop: 20, padding: '14px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111827', color: '#fff', border: 'none', borderRadius: 12, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}
               >
                 View Detailed Analytics
               </button>
@@ -487,14 +487,14 @@ export default function Dashboard() {
             <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
               <div>
                 <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Health Status</h1>
-                <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Compliance Overview</div>
+                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Compliance Overview</div>
               </div>
-              <span style={{ background: '#e6f9ee', color: '#008d46', borderRadius: 999, padding: '6px 12px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Annual Cycle: {new Date().getFullYear()}</span>
+              <span style={{ background: '#e6f9ee', color: '#008d46', borderRadius: 999, padding: '6px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Annual Cycle: {new Date().getFullYear()}</span>
             </motion.div>
 
             <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', borderRadius: 20, padding: 20, color: '#fff', marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#cbd5e0' }}>Your Next X-Ray Due</span>
+                <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#cbd5e0' }}>Your Next X-Ray Due</span>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
               </div>
               <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, marginBottom: 14 }}>{staffData?.nextDue ? formatFullDate(staffData.nextDue.date) : '—'}</div>
@@ -504,21 +504,21 @@ export default function Dashboard() {
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 700 }}>{staffData?.nextDue?.progressPercent ?? 0}%</span>
               </div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.14)', borderRadius: 999, padding: '6px 12px', fontSize: 10, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase' }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.14)', borderRadius: 999, padding: '6px 12px', fontSize: 12, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase' }}>
                 <Clock size={12} /> {staffData?.nextDue?.triggerLabel ?? 'NO ACTIVE CYCLE'}
               </div>
-              <div style={{ fontSize: 11, color: '#cbd5e0' }}>Annual Chest X-Ray Requirement</div>
+              <div style={{ fontSize: 12, color: '#cbd5e0' }}>Annual Chest X-Ray Requirement</div>
             </motion.div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <ShieldCheck size={18} color="#4299e1" />
-                <div style={{ fontSize: 10, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Unit Compliance</div>
+                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Unit Compliance</div>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#2b6cb0', marginTop: 4 }}>{staffData?.department.complianceRate ?? 0}%</div>
               </motion.div>
               <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <Clock size={18} color="#e53e3e" />
-                <div style={{ fontSize: 10, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Pending X-Rays</div>
+                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Pending X-Rays</div>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#e53e3e', marginTop: 4 }}>{String(staffData?.department.pendingStaffCount ?? 0).padStart(2, '0')}</div>
               </motion.div>
             </div>
@@ -543,7 +543,7 @@ export default function Dashboard() {
                 initial="hidden"
                 animate="visible"
                 onClick={() => setShowAnalytics(false)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2b6cb0', fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase', padding: 0, marginBottom: 24 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2b6cb0', fontSize: 13, fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase', padding: 0, minHeight: 44, marginBottom: 24 }}
               >
                 <ChevronLeft size={16} /> Back to Dashboard
               </motion.button>
@@ -578,7 +578,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
                   {adminMonthly.map(d => (
-                    <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 11, fontWeight: 700, color: '#a0aec0' }}>{d.label}</div>
+                    <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#a0aec0' }}>{d.label}</div>
                   ))}
                 </div>
               </motion.div>
@@ -590,9 +590,9 @@ export default function Dashboard() {
                   { label: 'Lowest', month: adminStats.lowest.label, value: `${adminStats.lowest.value}%`, color: '#e53e3e' },
                 ].map((s, i) => (
                   <motion.div key={s.label} custom={3 + i} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 10, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{s.label}</div>
                     <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
-                    {s.month && <div style={{ fontSize: 10, color: '#a0aec0', fontWeight: 700, marginTop: 4 }}>{s.month}</div>}
+                    {s.month && <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, marginTop: 4 }}>{s.month}</div>}
                   </motion.div>
                 ))}
               </div>
@@ -627,7 +627,7 @@ export default function Dashboard() {
                   <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>Hospital Compliance Overview</h1>
                   <p style={{ fontSize: 14, color: '#718096', marginBottom: 32 }}>Real-time hospital-wide surveillance analytics and personnel compliance tracking.</p>
                 </div>
-                <span style={{ background: '#ebf8ff', color: '#3182ce', borderRadius: 999, padding: '8px 16px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Live Sync</span>
+                <span style={{ background: '#ebf8ff', color: '#3182ce', borderRadius: 999, padding: '8px 16px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Live Sync</span>
               </motion.div>
 
               <div className="flex flex-col lg:flex-row gap-6" style={{ marginBottom: 24 }}>
@@ -636,7 +636,7 @@ export default function Dashboard() {
                   style={{ borderRadius: 20, position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', padding: '32px 36px', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <span style={{ background: 'rgba(0,0,0,0.25)', borderRadius: 999, padding: '6px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>HOSPITAL COMPLIANCE</span>
+                    <span style={{ background: 'rgba(0,0,0,0.25)', borderRadius: 999, padding: '6px 16px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>HOSPITAL COMPLIANCE</span>
                     <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 24 }}>
@@ -659,7 +659,7 @@ export default function Dashboard() {
                   style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: '32px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column' }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4a5568', fontFamily: 'Public Sans,sans-serif' }}>ANNUAL CLEARANCE PROGRESS</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4a5568', fontFamily: 'Public Sans,sans-serif' }}>ANNUAL CLEARANCE PROGRESS</div>
                     <BarChart3 size={18} color="#4299e1" style={{ flexShrink: 0 }} />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 20 }}>
@@ -671,7 +671,7 @@ export default function Dashboard() {
                   </div>
                   <motion.button onClick={() => setShowAnalytics(true)}
                     whileHover={{ filter: 'brightness(1.1)', scale: 1.01 }} whileTap={{ scale: 0.98 }}
-                    style={{ marginTop: 24, width: '100%', padding: '16px 20px', background: '#111827', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                    style={{ marginTop: 24, width: '100%', padding: '16px 20px', background: '#111827', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                   >
                     <span>View Detailed Analytics</span>
                     <span style={{ fontSize: 18 }}>›</span>
@@ -679,13 +679,13 @@ export default function Dashboard() {
                 </motion.div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6" style={{ marginBottom: 24 }}>
                 <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible"
                   whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
                   style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
                 >
                   <Users size={20} color="#4299e1" />
-                  <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 12 }}>Total Personnel</div>
+                  <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 12 }}>Total Personnel</div>
                   <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 28, fontWeight: 800, color: '#2b6cb0', marginTop: 4 }}>{adminData?.totalPersonnel ?? 0}</div>
                 </motion.div>
                 <motion.div custom={4} variants={fadeRise} initial="hidden" animate="visible"
@@ -693,7 +693,7 @@ export default function Dashboard() {
                   style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
                 >
                   <AlertCircle size={20} color="#e53e3e" />
-                  <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 12 }}>Critical Cases</div>
+                  <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 12 }}>Critical Cases</div>
                   <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 28, fontWeight: 800, color: '#e53e3e', marginTop: 4 }}>{adminData?.criticalCases ?? 0}</div>
                 </motion.div>
               </div>
@@ -714,8 +714,8 @@ export default function Dashboard() {
             style={{ borderRadius: 20, position: 'relative', overflow: 'hidden', background: 'linear-gradient(45deg, #1f3151 0%, #1f3151 40%, #0c4f38 75%, #00703f 100%)', padding: '32px 36px', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <span style={{ background: '#111827', borderRadius: 999, padding: '6px 16px', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>SURVEILLANCE PERIOD</span>
-              <span style={{ background: '#00b06b', borderRadius: 999, padding: '6px 16px', fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>ANNUAL CYCLE: {new Date().getFullYear()}</span>
+              <span style={{ background: '#111827', borderRadius: 999, padding: '6px 16px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>SURVEILLANCE PERIOD</span>
+              <span style={{ background: '#00b06b', borderRadius: 999, padding: '6px 16px', fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>ANNUAL CYCLE: {new Date().getFullYear()}</span>
             </div>
             <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 40, fontWeight: 800, marginBottom: 12, letterSpacing: '-0.02em' }}>{staffData?.nextDue ? formatFullDate(staffData.nextDue.date) : '—'}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, fontWeight: 700, color: '#68d391', marginBottom: 24, letterSpacing: '0.05em' }}>
@@ -725,14 +725,14 @@ export default function Dashboard() {
             <div style={{ background: '#192b3d', borderRadius: 12, padding: '16px 20px', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 14 }}>
               <AlertTriangle size={20} color="#f6ad55" strokeWidth={2.5} style={{ flexShrink: 0 }} />
               <div>
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#a0aec0', marginBottom: 4 }}>PENDING ACTIONS:</div>
+                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#a0aec0', marginBottom: 4 }}>PENDING ACTIONS:</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{staffData?.pendingActions ?? '—'}</div>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 40 }}>
               {[{ label: 'Department', value: staffData?.department.name ?? '—' }, { label: 'Department Code', value: staffData?.department.code ?? '—' }].map(item => (
                 <div key={item.label}>
-                  <div style={{ fontSize: 10, color: '#cbd5e0', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontWeight: 600 }}>{item.label}:</div>
+                  <div style={{ fontSize: 12, color: '#cbd5e0', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontWeight: 600 }}>{item.label}:</div>
                   <div style={{ fontSize: 14, fontWeight: 700 }}>{item.value}</div>
                 </div>
               ))}
@@ -744,19 +744,19 @@ export default function Dashboard() {
             className="w-full lg:flex-1"
             style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: '32px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column' }}
           >
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4a5568', marginBottom: 12, fontFamily: 'Public Sans,sans-serif' }}>MY DEPARTMENT COMPLIANCE</div>
+            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4a5568', marginBottom: 12, fontFamily: 'Public Sans,sans-serif' }}>MY DEPARTMENT COMPLIANCE</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, justifyContent: 'space-between' }}>
               <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 32, fontWeight: 800, color: '#1f3151', letterSpacing: '-0.02em' }}>{staffData?.department.complianceRate ?? 0}% Done</span>
               {(staffData?.department.complianceRate ?? 0) >= 80 ? (
-                <span style={{ border: '1px solid #00b06b', color: '#00b06b', borderRadius: 999, padding: '4px 12px', fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>On Track</span>
+                <span style={{ border: '1px solid #00b06b', color: '#00b06b', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>On Track</span>
               ) : (
-                <span style={{ border: '1px solid #f6ad55', color: '#b7791f', borderRadius: 999, padding: '4px 12px', fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Needs Attention</span>
+                <span style={{ border: '1px solid #f6ad55', color: '#b7791f', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Needs Attention</span>
               )}
             </div>
             <AnimatedRing percent={staffData?.department.complianceRate ?? 0} pendingCount={staffData?.department.pendingStaffCount ?? 0} />
             <motion.button onClick={() => router.push('/compliance')}
               whileHover={{ filter: 'brightness(1.1)', scale: 1.01 }} whileTap={{ scale: 0.98 }}
-              style={{ marginTop: 24, width: '100%', padding: '16px 20px', background: '#008d46', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              style={{ marginTop: 24, width: '100%', padding: '16px 20px', background: '#008d46', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
             >
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.3 }}>
                 <span>INSPECT</span>

@@ -31,19 +31,17 @@ describe('document access rules', () => {
         { id: 'admin-1', role: 'ADMIN', departmentId: 'dept-admin' } as any,
         'dept-2',
         'emp-2',
-        'RAD',
         'LAB',
       ),
     ).not.toThrow();
   });
 
-  it('allows a unit head to view documents in their own department', () => {
+  it('allows a unit head (department head) to view documents in their own department', () => {
     expect(() =>
       assertDocumentAccess(
         { id: 'u1', role: 'UNIT_HEAD', departmentId: 'dept-1' } as any,
         'dept-1',
         'emp-2',
-        'RAD',
       ),
     ).not.toThrow();
   });
@@ -54,20 +52,20 @@ describe('document access rules', () => {
         { id: 'u2', role: 'UNIT_HEAD', departmentId: 'dept-2' } as any,
         'dept-1',
         'emp-2',
-        'RAD',
       ),
     ).toThrow();
   });
 
-  it('allows staff to access documents in their own department', () => {
+  it('blocks a plain staff member from reading a colleague\'s files in their own department', () => {
+    // Tightened per the Aug 31 feedback: being in the same department is no longer
+    // sufficient on its own — only the department head, TB DOTS staff, HR, or ADMIN qualify.
     expect(() =>
       assertDocumentAccess(
         { id: 'staff-1', role: 'STAFF', departmentId: 'dept-1' } as any,
         'dept-1',
         'emp-2',
-        'RAD',
       ),
-    ).not.toThrow();
+    ).toThrow();
   });
 
   it('allows a staff member to access their own record even outside their department', () => {
@@ -76,7 +74,6 @@ describe('document access rules', () => {
         { id: 'emp-2', role: 'STAFF', departmentId: 'dept-1' } as any,
         'dept-2',
         'emp-2',
-        'RAD',
       ),
     ).not.toThrow();
   });
@@ -87,8 +84,18 @@ describe('document access rules', () => {
         { id: 'hr-1', role: 'STAFF', departmentId: 'dept-hr' } as any,
         'dept-1',
         'emp-2',
-        'RAD',
         'HR',
+      ),
+    ).not.toThrow();
+  });
+
+  it('allows TB DOTS Program staff to access documents across departments', () => {
+    expect(() =>
+      assertDocumentAccess(
+        { id: 'tbdots-1', role: 'STAFF', departmentId: 'dept-tbdots' } as any,
+        'dept-1',
+        'emp-2',
+        'TBDOTS',
       ),
     ).not.toThrow();
   });
@@ -99,7 +106,6 @@ describe('document access rules', () => {
         { id: 'staff-1', role: 'STAFF', departmentId: 'dept-1' } as any,
         'dept-2',
         'emp-2',
-        'RAD',
       ),
     ).toThrow();
   });

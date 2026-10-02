@@ -58,13 +58,13 @@ export default function Login() {
     <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
       <button
         onClick={() => setActiveTab('staff')}
-        style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', background: activeTab === 'staff' ? 'linear-gradient(to right, #1f3151 0%, #1c4b4f 100%)' : '#f8fafc', color: activeTab === 'staff' ? '#fff' : '#a0aec0', transition: 'all 0.2s' }}
+        style={{ flex: 1, padding: '12px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', background: activeTab === 'staff' ? 'linear-gradient(to right, #1f3151 0%, #1c4b4f 100%)' : '#f8fafc', color: activeTab === 'staff' ? '#fff' : '#a0aec0', transition: 'all 0.2s' }}
       >
         Staff Login
       </button>
       <button
         onClick={() => setActiveTab('admin')}
-        style={{ flex: 1, padding: '12px 0', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', background: activeTab === 'admin' ? 'linear-gradient(to right, #1f3151 0%, #1c4b4f 100%)' : '#f8fafc', color: activeTab === 'admin' ? '#fff' : '#a0aec0', transition: 'all 0.2s' }}
+        style={{ flex: 1, padding: '12px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', background: activeTab === 'admin' ? 'linear-gradient(to right, #1f3151 0%, #1c4b4f 100%)' : '#f8fafc', color: activeTab === 'admin' ? '#fff' : '#a0aec0', transition: 'all 0.2s' }}
       >
         Admin Login
       </button>
@@ -73,7 +73,7 @@ export default function Login() {
 
   const employeeIdField = (
     <div style={{ marginBottom: 16 }}>
-      <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Employee ID</label>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Employee ID</label>
       <input value={employeeId} onChange={e => setEmployeeId(e.target.value)} placeholder="Enter ID number"
         style={{ width: '100%', padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
         onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
@@ -84,14 +84,14 @@ export default function Login() {
 
   const passwordField = (
     <div style={{ marginBottom: 20 }}>
-      <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Password</label>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Password</label>
       <div style={{ position: 'relative' }}>
         <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter password"
           style={{ width: '100%', padding: '14px 40px 14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
           onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
           onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
         />
-        <button onClick={() => setShowPassword(v => !v)} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', padding: 0 }}>
+        <button onClick={() => setShowPassword(v => !v)} style={{ position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', padding: 0 }}>
           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
@@ -100,19 +100,19 @@ export default function Login() {
 
   const rememberRow = (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 10, fontWeight: 700, color: '#1f3151' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#1f3151' }}>
         <div style={{ width: 14, height: 14, borderRadius: 4, background: remember ? '#008d46' : '#fff', border: remember ? 'none' : '1px solid #cbd5e0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {remember && <svg width="9" height="7" viewBox="0 0 10 8" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
         </div>
         <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} style={{ display: 'none' }} />
         Remember Me
       </label>
-      <button onClick={() => router.push('/forgot-password')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 10, fontWeight: 700, textDecoration: 'underline' }}>Forgot Password?</button>
+      <button onClick={() => router.push('/forgot-password')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, textDecoration: 'underline', minHeight: 44, display: 'flex', alignItems: 'center' }}>Forgot Password?</button>
     </div>
   )
 
   const signupPrompt = (
-    <div style={{ textAlign: 'center', marginBottom: 26, fontSize: 11, color: '#4a5568', fontWeight: 600 }}>
+    <div style={{ textAlign: 'center', marginBottom: 26, fontSize: 12, color: '#4a5568', fontWeight: 600 }}>
       Need an account?{' '}
       <button onClick={() => router.push('/signup')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#008d46', fontWeight: 800, textDecoration: 'underline' }}>
         Create one here
@@ -121,7 +121,7 @@ export default function Login() {
   )
 
   const loginError = attempted && (missingFields || apiError) && (
-    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', textAlign: 'center', marginBottom: 20, marginTop: -12 }}>
+    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', textAlign: 'center', marginBottom: 20, marginTop: -12 }}>
       {missingFields ? 'Please enter both your Employee ID and Password.' : apiError}
     </motion.p>
   )
@@ -133,7 +133,7 @@ export default function Login() {
       whileTap={submitting ? undefined : { scale: 0.98 }}
       transition={{ duration: 0.15 }}
       disabled={submitting}
-      style={{ width: '100%', padding: '14px 0', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', marginBottom: 28, boxShadow: '0 8px 24px rgba(0,0,0,0.1)', opacity: submitting ? 0.75 : 1 }}
+      style={{ width: '100%', padding: '14px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', marginBottom: 28, boxShadow: '0 8px 24px rgba(0,0,0,0.1)', opacity: submitting ? 0.75 : 1 }}
     >
       <AnimatePresence mode="wait">
         <motion.span key={submitting ? 'submitting' : activeTab} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
@@ -145,14 +145,14 @@ export default function Login() {
 
   const finePrint = (
     <>
-      <p style={{ fontSize: 10, color: '#4a5568', textAlign: 'center', marginBottom: 32, lineHeight: 1.6, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+      <p style={{ fontSize: 12, color: '#4a5568', textAlign: 'center', marginBottom: 32, lineHeight: 1.6, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
         BY LOGGING IN, YOU AGREE TO THE<br/>
         <span style={{ fontWeight: 800, color: '#1f3151', cursor: 'pointer' }}>TERMS OF SERVICE</span>
         {' '}AND{' '}
         <span style={{ fontWeight: 800, color: '#1f3151', cursor: 'pointer' }}>PRIVACY POLICY</span>
       </p>
       <div style={{ textAlign: 'center' }}>
-        <span style={{ fontSize: 11, fontWeight: 800, color: '#3a7d44', letterSpacing: '0.1em', textTransform: 'uppercase' }}>AUTHORIZED ACCESS ONLY</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: '#3a7d44', letterSpacing: '0.1em', textTransform: 'uppercase' }}>AUTHORIZED ACCESS ONLY</span>
       </div>
     </>
   )
@@ -177,7 +177,7 @@ export default function Login() {
               <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 28, color: '#1f3151', letterSpacing: '-0.02em' }}>VMMC</span>
               <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 28, color: '#3a7d44', letterSpacing: '-0.02em' }}>TRACKER</span>
             </div>
-            <div style={{ fontSize: 11, color: '#718096', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginTop: 6, textAlign: 'center' }}>
+            <div style={{ fontSize: 12, color: '#718096', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginTop: 6, textAlign: 'center' }}>
               TB DOTS &amp; X-RAY COMPLIANCE
             </div>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#1f3151', textAlign: 'center', lineHeight: 1.5, marginTop: 28 }}>
@@ -209,14 +209,14 @@ export default function Login() {
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 19, fontWeight: 800, color: '#4ade80', letterSpacing: '0.02em' }}>VMMC</span>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 19, fontWeight: 800, color: '#fff', letterSpacing: '0.02em' }}>SURVEILLANCE</span>
               </div>
-              <div style={{ fontSize: 10, color: '#e2e8f0', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 4, fontWeight: 600 }}>
+              <div style={{ fontSize: 12, color: '#e2e8f0', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 4, fontWeight: 600 }}>
                 TB DOTS &amp; PULMONARY COMPLIANCE REGISTRY
               </div>
             </div>
           </div>
           <div className="hidden md:block" style={{ marginLeft: 'auto', textAlign: 'right' }}>
             <div style={{ color: '#fff', fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>Veterans Memorial Medical Center</div>
-            <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 500, marginTop: 4 }}>Staff Personal Surveillance Dashboard</div>
+            <div style={{ color: '#4ade80', fontSize: 12, fontWeight: 500, marginTop: 4 }}>Staff Personal Surveillance Dashboard</div>
           </div>
         </header>
 
@@ -253,7 +253,7 @@ export default function Login() {
               </motion.div>
             </div>
 
-            <div className="hidden lg:flex" style={{ position: 'absolute', bottom: 32, left: 80, gap: 64, fontSize: 11, color: '#a0aec0', opacity: 0.8, whiteSpace: 'nowrap' }}>
+            <div className="hidden lg:flex" style={{ position: 'absolute', bottom: 32, left: 80, gap: 64, fontSize: 12, color: '#a0aec0', opacity: 0.8, whiteSpace: 'nowrap' }}>
               <span style={{ letterSpacing: '0.02em' }}>Veterans Memorial Medical Center • Department of Health</span>
               <span style={{ letterSpacing: '0.02em' }}>Data Privacy Compliant (RA 10173) • Intranet Code Active</span>
             </div>

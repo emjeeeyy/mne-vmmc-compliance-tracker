@@ -4,7 +4,7 @@ import FirstLoginReset from '@/screens/FirstLoginReset'
 import { useAuthGuard } from '@/lib/useAuthGuard'
 
 export default function FirstLoginPage() {
-  const ready = useAuthGuard('auth')
+  const ready = useAuthGuard('first-login')
   if (!ready) return null
 
   return <FirstLoginReset />

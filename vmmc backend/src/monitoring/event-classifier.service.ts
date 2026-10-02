@@ -104,13 +104,16 @@ export class EventClassifierService {
         emitted.push('SLA_BREACH');
       }
 
+      // EXCEPTION (not WARNING) — the most severe non-clinical state in the system, and
+      // bumping it here also routes it into the escalations queue via the same
+      // EXCEPTION handling everything else gets (see NotificationDispatcherService).
       const daysAfterBirthday = daysBetween(today, new Date(record.birthday_date));
       if (daysAfterBirthday >= 90 && !subtypesSeen.has('THREE_MONTH_HR_NOTICE')) {
         await this.emit(
           record,
-          'WARNING',
+          'EXCEPTION',
           'THREE_MONTH_HR_NOTICE',
-          1,
+          2,
           'Three months after birthday with no approved clearance — HR follow-up required.',
         );
         emitted.push('THREE_MONTH_HR_NOTICE');
@@ -135,9 +138,9 @@ export class EventClassifierService {
       if (daysAfterBirthday >= 90 && !subtypesSeen.has('THREE_MONTH_HR_NOTICE')) {
         await this.emit(
           record,
-          'WARNING',
+          'EXCEPTION',
           'THREE_MONTH_HR_NOTICE',
-          1,
+          2,
           'Three months after birthday with no approved clearance — HR follow-up required.',
         );
         emitted.push('THREE_MONTH_HR_NOTICE');
@@ -180,6 +183,26 @@ export class EventClassifierService {
       1,
       `Next ${dose.vaccine_type} dose (after dose ${dose.dose}, administered ${dose.administered_date}) is overdue.`,
       dose.id,
+    );
+    return true;
+  }
+
+  /** Called directly from DocumentsService.review() on reject — not part of the
+   * daily classify() sweep, since a rejection is a one-off reviewer action, not
+   * something that gets re-detected by scanning compliance_records. De-duped on
+   * documentId like PEP/immunization above, though in practice a document can
+   * only ever be reviewed once (documents.service.ts guards against re-review). */
+  async classifyDocumentRejected(documentId: string, employeeId: string, reason: string): Promise<boolean> {
+    const already = await this.hasSourceEvent(documentId);
+    if (already) return false;
+
+    await this.emitOther(
+      employeeId,
+      'WARNING',
+      'DOCUMENT_REJECTED',
+      1,
+      `Your submitted document was not approved: ${reason}`,
+      documentId,
     );
     return true;
   }

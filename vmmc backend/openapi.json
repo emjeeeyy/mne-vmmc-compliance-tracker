@@ -25,6 +25,54 @@
         ]
       }
     },
+    "/api/auth/signup": {
+      "post": {
+        "operationId": "AuthController_signup",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignupDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/first-login/change-password": {
+      "post": {
+        "operationId": "AuthController_firstLoginChangePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirstLoginPasswordChangeDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/forgot-password": {
       "post": {
         "operationId": "AuthController_forgotPassword",
@@ -1268,6 +1316,156 @@
           "reports"
         ]
       }
+    },
+    "/api/reports/pii-index": {
+      "get": {
+        "operationId": "ReportsController_getPiiIndex",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "reports"
+        ]
+      }
+    },
+    "/api/change-requests": {
+      "post": {
+        "operationId": "ChangeRequestsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChangeRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "change-requests"
+        ]
+      },
+      "get": {
+        "operationId": "ChangeRequestsController_findPending",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "change-requests"
+        ]
+      }
+    },
+    "/api/change-requests/mine": {
+      "get": {
+        "operationId": "ChangeRequestsController_findMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "change-requests"
+        ]
+      }
+    },
+    "/api/change-requests/{id}/approve": {
+      "patch": {
+        "operationId": "ChangeRequestsController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "change-requests"
+        ]
+      }
+    },
+    "/api/change-requests/{id}/reject": {
+      "patch": {
+        "operationId": "ChangeRequestsController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RejectChangeRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "change-requests"
+        ]
+      }
     }
   },
   "info": {
@@ -1309,6 +1507,48 @@
           "employeeId",
           "password",
           "portal"
+        ]
+      },
+      "SignupDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string",
+            "example": "VMMC-25-0021"
+          },
+          "employmentType": {
+            "type": "string",
+            "enum": [
+              "PERMANENT",
+              "COS"
+            ],
+            "example": "PERMANENT"
+          }
+        },
+        "required": [
+          "employeeId"
+        ]
+      },
+      "FirstLoginPasswordChangeDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string",
+            "example": "VMMC-25-0021"
+          },
+          "currentPassword": {
+            "type": "string",
+            "example": "password123"
+          },
+          "newPassword": {
+            "type": "string",
+            "example": "NewSecurePass123!"
+          }
+        },
+        "required": [
+          "employeeId",
+          "currentPassword",
+          "newPassword"
         ]
       },
       "ForgotPasswordDto": {
@@ -1568,6 +1808,41 @@
           "dose",
           "administeredDate"
         ]
+      },
+      "CreateChangeRequestDto": {
+        "type": "object",
+        "properties": {
+          "fieldName": {
+            "type": "string",
+            "enum": [
+              "job_title",
+              "birth_date",
+              "employment_status",
+              "department_code"
+            ]
+          },
+          "requestedValue": {
+            "type": "string",
+            "example": "Staff Nurse II"
+          },
+          "reason": {
+            "type": "string",
+            "example": "Promoted last month, HR has not updated the system yet."
+          }
+        },
+        "required": [
+          "fieldName",
+          "requestedValue",
+          "reason"
+        ]
+      },
+      "RejectChangeRequestDto": {
+        "type": "object",
+        "properties": {
+          "reviewNotes": {
+            "type": "string"
+          }
+        }
       }
     }
   }

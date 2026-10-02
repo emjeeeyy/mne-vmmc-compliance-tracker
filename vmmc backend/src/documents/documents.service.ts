@@ -27,6 +27,7 @@ interface ReviewQueueEmployee {
   employee_id: string;
   full_name: string;
   job_title: string | null;
+  department_id: string;
   departments: ReviewQueueDepartment | ReviewQueueDepartment[];
 }
 
@@ -151,13 +152,11 @@ export class DocumentsService {
     return (data ?? [])
       .filter((row) => {
         const employee = Array.isArray(row.employees) ? row.employees[0] : row.employees;
-        const department = employee && Array.isArray(employee.departments) ? employee.departments[0] : employee?.departments;
         try {
           assertDocumentAccess(
             currentUser,
             employee?.department_id ?? currentUser.departmentId,
             employee?.id ?? currentUser.id,
-            department?.code,
             currentDepartment?.code,
           );
           return true;
@@ -223,6 +222,7 @@ export class DocumentsService {
         })
         .eq('id', documentId);
       if (error) throw new BadRequestException(error.message);
+      await this.eventClassifierService.classifyDocumentRejected(documentId, document.employee_id, dto.reason);
       return { message: 'Document rejected.' };
     }
 

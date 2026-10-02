@@ -29,4 +29,11 @@ export class ReportsController {
   getBiologicalMatrix(@CurrentUser() employee: EmployeeContext, @Query('department') department?: string) {
     return this.reportsService.getBiologicalMatrix(employee, department);
   }
+
+  /** ADMIN-only — overrides the controller's UNIT_HEAD-inclusive default, see getPiiIndex(). */
+  @Get('pii-index')
+  @Roles('ADMIN')
+  getPiiIndex() {
+    return this.reportsService.getPiiIndex();
+  }
 }

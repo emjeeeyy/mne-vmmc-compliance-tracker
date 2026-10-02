@@ -28,3 +28,15 @@ export interface BiologicalMatrixRow {
   followUpDate: string | null;
   notes: string | null;
 }
+
+export interface PiiIndexRow {
+  employeeId: string;
+  fullName: string;
+  employmentType: 'PERMANENT' | 'COS';
+  department: string;
+  jobTitle: string | null;
+  email: string;
+  phone: string | null;
+  birthDate: string;
+  role: string;
+}

@@ -37,7 +37,11 @@ export class EmailChannel implements OnModuleInit {
     });
   }
 
-  async send(to: string, subject: string, message: string): Promise<ChannelResult> {
+  /** `html` is optional so any existing plain-text call site keeps working
+   * unchanged — pass it (see `src/notifications/email-templates/`) to send the
+   * designed version; `message` always ships too, as the plain-text part
+   * every multipart email needs for clients/screen readers that don't render HTML. */
+  async send(to: string, subject: string, message: string, html?: string): Promise<ChannelResult> {
     if (!this.transporter) {
       this.logger.log(`[DEV EMAIL] to ${to}: ${subject} — ${message}`);
       return { status: 'LOGGED', providerRef: null, retryCount: 0 };
@@ -52,6 +56,7 @@ export class EmailChannel implements OnModuleInit {
           to,
           subject,
           text: message,
+          ...(html ? { html } : {}),
         });
         return { status: 'SENT', providerRef: info.messageId ?? null, retryCount: attempt };
       } catch (err) {

@@ -97,8 +97,8 @@ function initialsOf(name: string) {
 }
 
 const resultToggleButton = (active: boolean) => ({
-  flex: 1, padding: '10px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
-  fontFamily: 'Public Sans,sans-serif', fontSize: 11, fontWeight: 700,
+  flex: 1, padding: '10px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: 'none', cursor: 'pointer',
+  fontFamily: 'Public Sans,sans-serif', fontSize: 12, fontWeight: 700,
   background: active ? '#1f3151' : '#f8fafc', color: active ? '#fff' : '#a0aec0',
   transition: 'all 0.15s',
 })
@@ -279,7 +279,7 @@ export default function Upload() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', letterSpacing: '0.02em' }}>Result Details</span>
-              <button onClick={closeMetadataModal} style={{ width: 28, height: 28, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+              <button onClick={closeMetadataModal} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
                 <X size={14} />
               </button>
             </div>
@@ -290,7 +290,7 @@ export default function Upload() {
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Exam Date</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Exam Date</label>
               <input
                 type="date"
                 value={examDate}
@@ -300,7 +300,7 @@ export default function Upload() {
             </div>
 
             <div style={{ marginBottom: 16 }}>
-              <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Chest X-Ray Result</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Chest X-Ray Result</label>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button style={resultToggleButton(cxrResult === '')} onClick={() => setCxrResult('')}>N/A</button>
                 <button style={resultToggleButton(cxrResult === 'CLEARED')} onClick={() => setCxrResult('CLEARED')}>Cleared</button>
@@ -309,7 +309,7 @@ export default function Upload() {
             </div>
 
             <div style={{ marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>GeneXpert Result</label>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>GeneXpert Result</label>
               <div style={{ display: 'flex', gap: 6 }}>
                 <button style={resultToggleButton(genexpertResult === '')} onClick={() => setGenexpertResult('')}>N/A</button>
                 <button style={resultToggleButton(genexpertResult === 'NOT_DETECTED')} onClick={() => setGenexpertResult('NOT_DETECTED')}>Not Detected</button>
@@ -318,7 +318,7 @@ export default function Upload() {
             </div>
 
             {formError && (
-              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
+              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
                 {formError}
               </motion.p>
             )}
@@ -328,7 +328,7 @@ export default function Upload() {
               disabled={submitting}
               whileHover={submitting ? undefined : { scale: 1.02, filter: 'brightness(1.05)' }}
               whileTap={submitting ? undefined : { scale: 0.98 }}
-              style={{ width: '100%', padding: '14px 0', background: '#008d46', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.75 : 1 }}
+              style={{ width: '100%', padding: '14px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#008d46', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.75 : 1 }}
             >
               {submitting ? (retrying ? 'Retrying…' : 'Saving…') : 'Submit'}
             </motion.button>
@@ -347,9 +347,9 @@ export default function Upload() {
             <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div>
                 <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Review Queue</h1>
-                <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Awaiting Verification</div>
+                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Awaiting Verification</div>
               </div>
-              <span style={{ background: '#fffaf0', color: '#dd8b3a', borderRadius: 999, padding: '6px 12px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              <span style={{ background: '#fffaf0', color: '#dd8b3a', borderRadius: 999, padding: '6px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>
                 {pendingQueue.length} Pending
               </span>
             </motion.div>
@@ -375,8 +375,8 @@ export default function Upload() {
                   <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                     <div style={{ fontSize: 13, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{item.employee.fullName}</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                      <span style={{ background: '#fffaf0', color: '#dd8b3a', borderRadius: 999, padding: '2px 8px', fontSize: 9, fontWeight: 800, textTransform: 'uppercase' }}>{resultLabel(item.cxrResult, item.genexpertResult)}</span>
-                      <span style={{ fontSize: 10, color: '#a0aec0' }}>{formatUploadedAt(item.uploadedAt)}</span>
+                      <span style={{ background: '#fffaf0', color: '#dd8b3a', borderRadius: 999, padding: '2px 8px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>{resultLabel(item.cxrResult, item.genexpertResult)}</span>
+                      <span style={{ fontSize: 12, color: '#a0aec0' }}>{formatUploadedAt(item.uploadedAt)}</span>
                     </div>
                   </div>
                   <ChevronRight size={18} color="#cbd5e0" style={{ flexShrink: 0 }} />
@@ -391,7 +391,7 @@ export default function Upload() {
           <>
         <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 20 }}>
           <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Medical Documents</h1>
-          <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Upload &amp; Records</div>
+          <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Upload &amp; Records</div>
         </motion.div>
 
         <motion.div
@@ -416,12 +416,12 @@ export default function Upload() {
           <p style={{ fontSize: 12, color: '#a0aec0', textAlign: 'center', lineHeight: 1.6, maxWidth: 240, margin: 0, marginBottom: 8 }}>
             Tap to take a photo of your result or select a file.
           </p>
-          <p style={{ fontSize: 11, color: '#cbd5e0', textAlign: 'center', margin: 0, marginBottom: 20 }}>
+          <p style={{ fontSize: 12, color: '#cbd5e0', textAlign: 'center', margin: 0, marginBottom: 20 }}>
             PDF, PNG, JPEG • Max 5MB
           </p>
           <button
             onClick={() => setShowUploadSheet(true)}
-            style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 32px', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em' }}
+            style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 32px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em' }}
           >
             Browse Files
           </button>
@@ -430,7 +430,7 @@ export default function Upload() {
         </motion.div>
 
         {formError && !pendingFile && (
-          <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginTop: -12, marginBottom: 16 }}>
+          <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginTop: -12, marginBottom: 16 }}>
             {formError}
           </motion.p>
         )}
@@ -455,7 +455,7 @@ export default function Upload() {
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', letterSpacing: '0.02em' }}>UPLOAD</span>
-                  <button onClick={() => setShowUploadSheet(false)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                  <button onClick={() => setShowUploadSheet(false)} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
                     <X size={14} />
                   </button>
                 </div>
@@ -468,19 +468,19 @@ export default function Upload() {
                     style={{ background: '#f1f5f9', border: 'none', borderRadius: 16, padding: '22px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: 'pointer' }}
                   >
                     <Camera size={26} color="#1f3151" strokeWidth={1.5} />
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#1f3151', letterSpacing: '0.03em' }}>CAMERA</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', letterSpacing: '0.03em' }}>CAMERA</span>
                   </button>
                   <button
                     onClick={() => mobileInputRef.current?.click()}
                     style={{ background: '#f1f5f9', border: 'none', borderRadius: 16, padding: '22px 12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, cursor: 'pointer' }}
                   >
                     <File size={26} color="#1f3151" strokeWidth={1.5} />
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#1f3151', letterSpacing: '0.03em' }}>FILES</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', letterSpacing: '0.03em' }}>FILES</span>
                   </button>
                 </div>
                 <button
                   onClick={() => setShowUploadSheet(false)}
-                  style={{ width: '100%', padding: 14, background: '#e2e8f0', color: '#1f3151', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ width: '100%', padding: 14, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e2e8f0', color: '#1f3151', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                 >
                   Cancel
                 </button>
@@ -489,7 +489,7 @@ export default function Upload() {
           )}
         </AnimatePresence>
 
-        <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 12 }}>Recent Submissions</div>
+        <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 12 }}>Recent Submissions</div>
         {docsLoading && <div style={{ textAlign: 'center', padding: '20px 0', color: '#a0aec0', fontSize: 13 }}>Loading…</div>}
         <AnimatePresence initial={false}>
           {!docsLoading && documents.map((doc, i) => (
@@ -508,7 +508,7 @@ export default function Upload() {
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#1f3151', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labelFor(doc)}</div>
-                <div style={{ fontSize: 11, color: '#a0aec0' }}>SUBMITTED: {shortDate(formatUploadedAt(doc.uploadedAt))}</div>
+                <div style={{ fontSize: 12, color: '#a0aec0' }}>SUBMITTED: {shortDate(formatUploadedAt(doc.uploadedAt))}</div>
               </div>
               <Clock size={18} color="#a0aec0" style={{ flexShrink: 0 }} />
             </motion.div>
@@ -553,7 +553,7 @@ export default function Upload() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', marginBottom: 4 }}>{item.employee.fullName}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ background: '#fffaf0', color: '#dd8b3a', borderRadius: 999, padding: '3px 10px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }}>{resultLabel(item.cxrResult, item.genexpertResult)}</span>
+                        <span style={{ background: '#fffaf0', color: '#dd8b3a', borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>{resultLabel(item.cxrResult, item.genexpertResult)}</span>
                         <span style={{ fontSize: 12, color: '#a0aec0' }}>{item.employee.employeeId} • {formatUploadedAt(item.uploadedAt)}</span>
                       </div>
                     </div>
@@ -605,7 +605,7 @@ export default function Upload() {
                 onClick={e => { e.stopPropagation(); inputRef.current?.click() }}
                 whileHover={{ filter: 'brightness(1.1)', y: -1 }}
                 whileTap={{ scale: 0.97 }}
-                style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 28px', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 8 }}
+                style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 28px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 8 }}
               >
                 BROWSE FILE
               </motion.button>
@@ -613,7 +613,7 @@ export default function Upload() {
             </motion.div>
             <input ref={inputRef} type="file" accept=".pdf,.png,.jpeg,.jpg" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) openMetadataModal(f) }} />
             {formError && !pendingFile && (
-              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginTop: 12, textAlign: 'center' }}>
+              <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginTop: 12, textAlign: 'center' }}>
                 {formError}
               </motion.p>
             )}
@@ -641,14 +641,14 @@ export default function Upload() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#1f3151', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labelFor(doc)}</div>
-                        <div style={{ fontSize: 11, color: '#a0aec0', marginBottom: 2 }}>{formatFileSize(doc.fileSizeBytes)}</div>
-                        <div style={{ fontSize: 11, color: '#a0aec0' }}>{formatUploadedAt(doc.uploadedAt)}</div>
+                        <div style={{ fontSize: 12, color: '#a0aec0', marginBottom: 2 }}>{formatFileSize(doc.fileSizeBytes)}</div>
+                        <div style={{ fontSize: 12, color: '#a0aec0' }}>{formatUploadedAt(doc.uploadedAt)}</div>
                       </div>
                       <motion.span
                         initial={i === 0 ? { scale: 0.7, opacity: 0 } : false}
                         animate={{ scale: 1, opacity: 1 }}
                         transition={{ delay: 0.25, duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                        style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, borderRadius: 999, padding: '4px 12px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+                        style={{ background: badge.bg, color: badge.color, border: `1px solid ${badge.border}`, borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}
                       >
                         {badge.label}
                       </motion.span>
@@ -693,7 +693,7 @@ export default function Upload() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', letterSpacing: '0.02em', textTransform: 'uppercase' }}>Detailed Document Review</span>
-                <button onClick={closeQueueModal} style={{ width: 28, height: 28, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                <button onClick={closeQueueModal} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
                   <X size={14} />
                 </button>
               </div>
@@ -704,34 +704,34 @@ export default function Upload() {
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedQueueItem.employee.fullName}</div>
-                  <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>{selectedQueueItem.employee.employeeId} • {selectedQueueItem.employee.department}</div>
+                  <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{selectedQueueItem.employee.employeeId} • {selectedQueueItem.employee.department}</div>
                 </div>
               </div>
 
               <div style={{ background: '#f1f5f9', borderRadius: 16, padding: '20px 16px', marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, textAlign: 'center' }}>{resultLabel(selectedQueueItem.cxrResult, selectedQueueItem.genexpertResult)}</div>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, textAlign: 'center' }}>{resultLabel(selectedQueueItem.cxrResult, selectedQueueItem.genexpertResult)}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {selectedQueueItem.cxrResult !== 'NOT_APPLICABLE' && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, color: '#a0aec0', textTransform: 'uppercase' }}>Chest X-Ray</span>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: selectedQueueItem.cxrResult === 'INFILTRATE' ? '#c53030' : '#2f855a', textTransform: 'uppercase' }}>{selectedQueueItem.cxrResult}</span>
+                      <span style={{ fontSize: 12, color: '#a0aec0', textTransform: 'uppercase' }}>Chest X-Ray</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: selectedQueueItem.cxrResult === 'INFILTRATE' ? '#c53030' : '#2f855a', textTransform: 'uppercase' }}>{selectedQueueItem.cxrResult}</span>
                     </div>
                   )}
                   {selectedQueueItem.genexpertResult !== 'NOT_APPLICABLE' && (
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: 11, color: '#a0aec0', textTransform: 'uppercase' }}>GeneXpert</span>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: selectedQueueItem.genexpertResult === 'DETECTED' ? '#c53030' : '#2f855a', textTransform: 'uppercase' }}>{selectedQueueItem.genexpertResult}</span>
+                      <span style={{ fontSize: 12, color: '#a0aec0', textTransform: 'uppercase' }}>GeneXpert</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: selectedQueueItem.genexpertResult === 'DETECTED' ? '#c53030' : '#2f855a', textTransform: 'uppercase' }}>{selectedQueueItem.genexpertResult}</span>
                     </div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 11, color: '#a0aec0', textTransform: 'uppercase' }}>Exam Date</span>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedQueueItem.examDate ?? '—'}</span>
+                    <span style={{ fontSize: 12, color: '#a0aec0', textTransform: 'uppercase' }}>Exam Date</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedQueueItem.examDate ?? '—'}</span>
                   </div>
                 </div>
               </div>
 
               <div style={{ marginBottom: 14 }}>
-                <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Rejection Reason</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Rejection Reason</label>
                 <textarea
                   value={rejectReason}
                   onChange={e => setRejectReason(e.target.value)}
@@ -742,24 +742,24 @@ export default function Upload() {
               </div>
 
               {!signatureId && (
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#b7791f', marginBottom: 12 }}>*Set up your digital signature in Profile before approving.</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#b7791f', marginBottom: 12 }}>*Set up your digital signature in Profile before approving.</p>
               )}
               {reviewError && (
-                <p style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginBottom: 12 }}>{reviewError}</p>
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 12 }}>{reviewError}</p>
               )}
 
               <div style={{ display: 'flex', gap: 10 }}>
                 <button
                   onClick={handleReject}
                   disabled={reviewSubmitting}
-                  style={{ flex: 1, padding: '13px 0', background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: reviewSubmitting ? 'default' : 'pointer', opacity: reviewSubmitting ? 0.75 : 1 }}
+                  style={{ flex: 1, padding: '13px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: reviewSubmitting ? 'default' : 'pointer', opacity: reviewSubmitting ? 0.75 : 1 }}
                 >
                   Reject
                 </button>
                 <button
                   onClick={handleApprove}
                   disabled={reviewSubmitting || !signatureId}
-                  style={{ flex: 1, padding: '13px 0', background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: reviewSubmitting || !signatureId ? 'default' : 'pointer', opacity: reviewSubmitting || !signatureId ? 0.6 : 1 }}
+                  style={{ flex: 1, padding: '13px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: reviewSubmitting || !signatureId ? 'default' : 'pointer', opacity: reviewSubmitting || !signatureId ? 0.6 : 1 }}
                 >
                   {reviewSubmitting ? 'Saving…' : 'Approve'}
                 </button>

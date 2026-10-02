@@ -50,28 +50,29 @@ export function assertRecordAccess(currentUser: EmployeeContext, targetDepartmen
 }
 
 /**
- * Document access is desktop-first and department-scoped:
- * - ADMIN sees all uploaded files
- * - UNIT_HEAD may access their own department's documents
- * - STAFF may access documents from their own department
- * - HR staff may access documents across departments
+ * Document access is restricted to those with an actual clinical/administrative
+ * need to see it, not "anyone in the same department":
+ * - ADMIN sees all uploaded files (absorbs TB Head clinical duties)
+ * - Every employee may always see their own documents
+ * - UNIT_HEAD (department head) may access their own department's documents
+ * - TB DOTS Program and HR department staff may access documents across every department
+ *
+ * A plain STAFF member outside TB DOTS/HR gets none of the above beyond their own
+ * record — deliberately narrower than "any staff in their own department", which is
+ * what this function used to allow until the Aug 31 feedback flagged it as too broad.
  */
 export function assertDocumentAccess(
   currentUser: Pick<EmployeeContext, 'id' | 'role' | 'departmentId'>,
   targetDepartmentId: string,
   targetEmployeeId: string,
-  targetDepartmentCode?: string,
   currentUserDepartmentCode?: string,
 ) {
   if (currentUser.role === 'ADMIN') return;
+  if (currentUser.id === targetEmployeeId) return;
   if (currentUser.role === 'UNIT_HEAD' && currentUser.departmentId === targetDepartmentId) return;
 
-  if (currentUser.role === 'STAFF') {
-    if (currentUser.id === targetEmployeeId) return;
-    if (currentUser.departmentId === targetDepartmentId) return;
-    if ((currentUserDepartmentCode ?? '').toUpperCase() === 'HR') return;
-    if ((targetDepartmentCode ?? '').toUpperCase() === 'HR' && currentUser.departmentId === targetDepartmentId) return;
-  }
+  const currentCode = (currentUserDepartmentCode ?? '').toUpperCase();
+  if (currentCode === 'HR' || currentCode === 'TBDOTS') return;
 
   throw new ForbiddenException('You do not have permission to access this document.');
 }

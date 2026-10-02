@@ -192,19 +192,19 @@ export default function ForgotPassword() {
   }
 
   const contactErrorNote = contactAttempted && contactError && (
-    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginTop: -12, marginBottom: 20 }}>
+    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginTop: -12, marginBottom: 20 }}>
       {contactError}
     </motion.p>
   )
 
   const otpErrorNote = otpError && (
-    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', textAlign: 'center', marginTop: 16 }}>
+    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', textAlign: 'center', marginTop: 16 }}>
       {otpError}
     </motion.p>
   )
 
   const resetErrorNote = resetAttempted && resetErrorMessage && (
-    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 11, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
+    <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>
       {resetErrorMessage}
     </motion.p>
   )
@@ -216,7 +216,7 @@ export default function ForgotPassword() {
       whileTap={submitting ? undefined : { scale: 0.98 }}
       transition={{ duration: 0.15 }}
       disabled={submitting}
-      style={{ width: '100%', padding: '14px 0', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', opacity: submitting ? 0.75 : 1 }}
+      style={{ width: '100%', padding: '14px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', opacity: submitting ? 0.75 : 1 }}
     >
       {submitting ? 'Sending…' : 'Confirm'}
     </motion.button>
@@ -229,7 +229,7 @@ export default function ForgotPassword() {
       whileTap={submitting ? undefined : { scale: 0.98 }}
       transition={{ duration: 0.15 }}
       disabled={submitting}
-      style={{ width: '100%', padding: '14px 0', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', opacity: submitting ? 0.75 : 1 }}
+      style={{ width: '100%', padding: '14px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', opacity: submitting ? 0.75 : 1 }}
     >
       {submitting ? 'Verifying…' : 'Verify Code'}
     </motion.button>
@@ -242,7 +242,7 @@ export default function ForgotPassword() {
       whileTap={submitting ? undefined : { scale: 0.98 }}
       transition={{ duration: 0.15 }}
       disabled={submitting}
-      style={{ width: '100%', padding: '14px 0', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', opacity: submitting ? 0.75 : 1 }}
+      style={{ width: '100%', padding: '14px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', opacity: submitting ? 0.75 : 1 }}
     >
       {submitting ? 'Confirming…' : 'Confirm'}
     </motion.button>
@@ -250,10 +250,10 @@ export default function ForgotPassword() {
 
   const resendRow = (
     <div style={{ textAlign: 'center', marginTop: 20 }}>
-      <span style={{ fontSize: 11, color: '#a0aec0' }}>Didn&apos;t receive the code? </span>
-      <button onClick={handleResend} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 11, fontWeight: 700, textDecoration: 'underline' }}>Resend</button>
+      <span style={{ fontSize: 12, color: '#a0aec0' }}>Didn&apos;t receive the code? </span>
+      <button onClick={handleResend} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, textDecoration: 'underline' }}>Resend</button>
       {resent && (
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontSize: 11, fontWeight: 700, color: '#008d46', marginTop: 8 }}>
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontSize: 12, fontWeight: 700, color: '#008d46', marginTop: 8 }}>
           Code resent!
         </motion.p>
       )}
@@ -273,7 +273,7 @@ export default function ForgotPassword() {
         onClick={() => router.push('/login')}
         whileHover={{ scale: 1.02, filter: 'brightness(1.05)' }}
         whileTap={{ scale: 0.98 }}
-        style={{ width: '100%', padding: '14px 0', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}
+        style={{ width: '100%', padding: '14px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', boxShadow: '0 8px 24px rgba(0,0,0,0.1)' }}
       >
         Confirm
       </motion.button>
@@ -284,7 +284,7 @@ export default function ForgotPassword() {
     <>
       {/* Mobile-native forgot password (phones, < sm) */}
       <div className="flex sm:hidden" style={{ minHeight: '100vh', background: step === 'reset' && resetSuccess ? 'linear-gradient(180deg, #a9bce2 0%, #eef3f2 45%, #c6e8d2 100%)' : '#f4f7f6', flexDirection: 'column', padding: '20px 24px 40px', transition: 'background 0.3s' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '32px 1fr 32px', alignItems: 'center' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 44px', alignItems: 'center' }}>
           <button
             onClick={() => {
               if (step === 'reset' && resetSuccess) router.push('/login')
@@ -293,7 +293,7 @@ export default function ForgotPassword() {
               else setStep('verify')
             }}
             aria-label="Go back"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', padding: 4, display: 'flex' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <ChevronLeft size={20} />
           </button>
@@ -305,7 +305,7 @@ export default function ForgotPassword() {
 
         {step === 'request' && (
           <>
-            <p style={{ fontSize: 11, color: '#a0aec0', textAlign: 'center', marginTop: 6, marginBottom: 44 }}>
+            <p style={{ fontSize: 12, color: '#a0aec0', textAlign: 'center', marginTop: 6, marginBottom: 44 }}>
               Please enter your email to reset your password.
             </p>
             <div>
@@ -327,7 +327,7 @@ export default function ForgotPassword() {
 
         {step === 'verify' && (
           <>
-            <p style={{ fontSize: 11, color: '#a0aec0', textAlign: 'center', marginTop: 6, marginBottom: 40, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 12, color: '#a0aec0', textAlign: 'center', marginTop: 6, marginBottom: 40, lineHeight: 1.6 }}>
               We sent a reset link to {maskedContact}. Enter the 6 digit code mentioned in the text.
             </p>
             <div>
@@ -345,7 +345,7 @@ export default function ForgotPassword() {
               <div style={{ marginTop: 20, marginBottom: 6 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 700, color: '#1f3151' }}>Set a new password</span>
               </div>
-              <p style={{ fontSize: 11, color: '#a0aec0', marginBottom: 28, lineHeight: 1.6 }}>
+              <p style={{ fontSize: 12, color: '#a0aec0', marginBottom: 28, lineHeight: 1.6 }}>
                 Create a new password. Ensure it differs from previous ones for security
               </p>
 
@@ -391,14 +391,14 @@ export default function ForgotPassword() {
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 19, fontWeight: 800, color: '#4ade80', letterSpacing: '0.02em' }}>VMMC</span>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 19, fontWeight: 800, color: '#fff', letterSpacing: '0.02em' }}>SURVEILLANCE</span>
               </div>
-              <div style={{ fontSize: 10, color: '#e2e8f0', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 4, fontWeight: 600 }}>
+              <div style={{ fontSize: 12, color: '#e2e8f0', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 4, fontWeight: 600 }}>
                 TB DOTS &amp; PULMONARY COMPLIANCE REGISTRY
               </div>
             </div>
           </div>
           <div className="hidden md:block" style={{ marginLeft: 'auto', textAlign: 'right' }}>
             <div style={{ color: '#fff', fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>Veterans Memorial Medical Center</div>
-            <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 500, marginTop: 4 }}>Staff Personal Surveillance Dashboard</div>
+            <div style={{ color: '#4ade80', fontSize: 12, fontWeight: 500, marginTop: 4 }}>Staff Personal Surveillance Dashboard</div>
           </div>
         </header>
 
@@ -435,7 +435,7 @@ export default function ForgotPassword() {
               </motion.div>
             </div>
 
-            <div className="hidden lg:flex" style={{ position: 'absolute', bottom: 32, left: 80, gap: 64, fontSize: 11, color: '#a0aec0', opacity: 0.8, whiteSpace: 'nowrap' }}>
+            <div className="hidden lg:flex" style={{ position: 'absolute', bottom: 32, left: 80, gap: 64, fontSize: 12, color: '#a0aec0', opacity: 0.8, whiteSpace: 'nowrap' }}>
               <span style={{ letterSpacing: '0.02em' }}>Veterans Memorial Medical Center • Department of Health</span>
               <span style={{ letterSpacing: '0.02em' }}>Data Privacy Compliant (RA 10173) • Intranet Code Active</span>
             </div>
@@ -453,7 +453,7 @@ export default function ForgotPassword() {
                 <>
                   <button
                     onClick={() => router.push('/login')}
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, marginBottom: 20 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, minHeight: 44, marginBottom: 20 }}
                   >
                     <ChevronLeft size={14} strokeWidth={2.5} /> Back to Login
                   </button>
@@ -464,7 +464,7 @@ export default function ForgotPassword() {
                   </p>
 
                   <div style={{ marginBottom: 24 }}>
-                    <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Email Address or Phone Number</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Email Address or Phone Number</label>
                     <input
                       value={contact}
                       onChange={e => handleContactChange(e.target.value)}
@@ -480,9 +480,9 @@ export default function ForgotPassword() {
                   {confirmButton}
 
                   <div style={{ textAlign: 'center', marginTop: 28 }}>
-                    <span style={{ fontSize: 11, color: '#718096' }}>
+                    <span style={{ fontSize: 12, color: '#718096' }}>
                       Remember your password?{' '}
-                      <button onClick={() => router.push('/login')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 11, fontWeight: 700, padding: 0, textDecoration: 'underline' }}>
+                      <button onClick={() => router.push('/login')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, textDecoration: 'underline' }}>
                         Log In
                       </button>
                     </span>
@@ -494,7 +494,7 @@ export default function ForgotPassword() {
                 <>
                   <button
                     onClick={() => setStep('request')}
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, marginBottom: 20 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, minHeight: 44, marginBottom: 20 }}
                   >
                     <ChevronLeft size={14} strokeWidth={2.5} /> Back
                   </button>
@@ -516,7 +516,7 @@ export default function ForgotPassword() {
                   <>
                     <button
                       onClick={() => setStep('verify')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, marginBottom: 20 }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, minHeight: 44, marginBottom: 20 }}
                     >
                       <ChevronLeft size={14} strokeWidth={2.5} /> Back
                     </button>
@@ -527,7 +527,7 @@ export default function ForgotPassword() {
                     </p>
 
                     <div style={{ marginBottom: 20 }}>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>New Password</label>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>New Password</label>
                       <input
                         type="password"
                         value={newPassword}
@@ -539,7 +539,7 @@ export default function ForgotPassword() {
                       />
                     </div>
                     <div style={{ marginBottom: 24 }}>
-                      <label style={{ display: 'block', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Confirm Password</label>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Confirm Password</label>
                       <input
                         type="password"
                         value={confirmPassword}

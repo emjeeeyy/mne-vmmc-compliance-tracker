@@ -1,7 +1,8 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
+import { parseEmploymentTypeFromEmployeeId } from '../common/assert-access';
 import { EmployeeContext } from '../auth/types/role';
 import { SupabaseService } from '../supabase/supabase.service';
-import { BiologicalMatrixRow, ClearanceSummaryRow, DelinquencyRow } from './types';
+import { BiologicalMatrixRow, ClearanceSummaryRow, DelinquencyRow, PiiIndexRow } from './types';
 
 function daysBetween(a: Date, b: Date) {
   return Math.floor((a.getTime() - b.getTime()) / 86_400_000);
@@ -141,6 +142,38 @@ export class ReportsService {
         prophylaxisStatus: log.prophylaxis_status,
         followUpDate: log.follow_up_date,
         notes: log.notes,
+      };
+    });
+  }
+
+  /** ADMIN-only (enforced at the controller — see ReportsController's method-level @Roles
+   * override) — unlike the other three reports, this one is deliberately never department-scoped
+   * or UNIT_HEAD-accessible: it's a hospital-wide personal-data index (Aug 31 feedback), and PII
+   * exposure should default to the narrowest role, not the same UNIT_HEAD/ADMIN split the
+   * compliance-focused reports use. employmentType is derived from the employee_id format
+   * (VMMC-COS-YY-NNNN vs VMMC-YY-NNNN) via the same parser signup/assert-access already use —
+   * there's no separate stored column for it. */
+  async getPiiIndex(): Promise<PiiIndexRow[]> {
+    const { data, error } = await this.supabaseService
+      .getClient()
+      .from('employees')
+      .select('employee_id, full_name, job_title, email, phone, birth_date, role, departments!employees_department_id_fkey(name)')
+      .eq('employment_status', 'ACTIVE')
+      .order('full_name', { ascending: true });
+    if (error) throw error;
+
+    return (data ?? []).map((row) => {
+      const dept = Array.isArray(row.departments) ? row.departments[0] : row.departments;
+      return {
+        employeeId: row.employee_id,
+        fullName: row.full_name,
+        employmentType: parseEmploymentTypeFromEmployeeId(row.employee_id),
+        department: dept?.name ?? '',
+        jobTitle: row.job_title,
+        email: row.email,
+        phone: row.phone,
+        birthDate: row.birth_date,
+        role: row.role,
       };
     });
   }

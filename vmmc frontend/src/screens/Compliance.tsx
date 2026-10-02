@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, ChevronDown, X, Download, HelpCircle } from 'lucide-react'
 import { fadeRise } from '@/lib/motion'
 import { getPreciseRole, type PreciseRole } from '@/lib/auth'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
-import { SkeletonListRow, SkeletonStaffCard } from '@/components/Skeleton'
+import { SkeletonListRow, SkeletonStaffCard, SkeletonCard } from '@/components/Skeleton'
 
 type Status = 'Cleared' | 'Infiltrate (L)' | 'Not Detected' | 'Detected' | '—'
 
@@ -70,7 +71,7 @@ function SlaStatusBadge({ status }: { status: StaffMember['slaStatus'] }) {
   if (status !== 'OVERDUE' && status !== 'NON_COMPLIANT') return null
   const label = status === 'OVERDUE' ? 'Overdue' : 'Non-Compliant'
   return (
-    <span style={{ background: '#f1f5f9', color: '#4a5568', border: '1px solid #cbd5e0', borderRadius: 999, padding: '3px 10px', fontSize: 9, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+    <span style={{ background: '#f1f5f9', color: '#4a5568', border: '1px solid #cbd5e0', borderRadius: 999, padding: '3px 10px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
       {label}
     </span>
   )
@@ -101,7 +102,7 @@ function StatusBadge({ status }: { status: Status }) {
   const dotColor = isAlert ? '#e53e3e' : '#38a169'
 
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: bgColor, color: textColor, border: `1px solid ${borderColor}`, borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: bgColor, color: textColor, border: `1px solid ${borderColor}`, borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
       <PulseDot alert={isAlert} color={dotColor} />
       {status}
     </span>
@@ -140,7 +141,7 @@ function StaffCard({ staff, index, onView }: { staff: StaffMember; index: number
       <div style={{ padding: '32px 24px 24px', zIndex: 1, position: 'relative' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
           <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 20, fontWeight: 800, color: '#1f3151', lineHeight: 1.1, textTransform: 'uppercase' }}>{staff.name}</div>
-          <span style={{ background: '#f1f5f9', color: '#4a5568', borderRadius: 999, padding: '4px 10px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0 }}>{staff.dept}</span>
+          <span style={{ background: '#f1f5f9', color: '#4a5568', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0 }}>{staff.dept}</span>
         </div>
         <div style={{ fontSize: 13, color: '#a0aec0', marginBottom: (staff.slaStatus === 'OVERDUE' || staff.slaStatus === 'NON_COMPLIANT') ? 10 : 20, lineHeight: 1.5 }}>
           {staff.id}<br/>{staff.role}
@@ -150,11 +151,11 @@ function StaffCard({ staff, index, onView }: { staff: StaffMember; index: number
         )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#718096', letterSpacing: '0.05em', textTransform: 'uppercase' }}>CHEST X-RAY:</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#718096', letterSpacing: '0.05em', textTransform: 'uppercase' }}>CHEST X-RAY:</span>
           <StatusBadge status={staff.xray} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '10px 14px', marginBottom: 24 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#718096', letterSpacing: '0.05em', textTransform: 'uppercase' }}>GENEXPERT:</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#718096', letterSpacing: '0.05em', textTransform: 'uppercase' }}>GENEXPERT:</span>
           <StatusBadge status={staff.genexpert} />
         </div>
 
@@ -168,7 +169,7 @@ function StaffCard({ staff, index, onView }: { staff: StaffMember; index: number
                 onClick={onView}
                 whileHover={{ filter: 'brightness(1.1)', scale: 1.02 }}
                 whileTap={{ scale: 0.97 }}
-                style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'center', lineHeight: 1.3 }}
+                style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 16px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 600, cursor: 'pointer', textAlign: 'center', lineHeight: 1.3 }}
               >
                 View Official<br/>X-Ray PDF
               </motion.button>
@@ -202,7 +203,7 @@ function MobileStaffCard({ staff, index, onView }: { staff: StaffMember; index: 
         </div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', lineHeight: 1.2 }}>{staff.name}</div>
-          <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>{staff.id} • {staff.role}</div>
+          <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{staff.id} • {staff.role}</div>
           {(staff.slaStatus === 'OVERDUE' || staff.slaStatus === 'NON_COMPLIANT') && (
             <div style={{ marginTop: 6 }}><SlaStatusBadge status={staff.slaStatus} /></div>
           )}
@@ -216,7 +217,7 @@ function MobileStaffCard({ staff, index, onView }: { staff: StaffMember; index: 
           if (f.status === '—') color = '#a0aec0'
           return (
             <div key={f.label} style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
-              <div style={{ fontSize: 9, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{f.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{f.label}</div>
               <div style={{ fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase' }}>{f.status}</div>
             </div>
           )
@@ -225,10 +226,246 @@ function MobileStaffCard({ staff, index, onView }: { staff: StaffMember; index: 
 
       <button
         onClick={onView}
-        style={{ width: '100%', background: '#111827', color: '#fff', border: 'none', borderRadius: 12, padding: '12px', fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer' }}
+        style={{ width: '100%', background: '#111827', color: '#fff', border: 'none', borderRadius: 12, padding: '12px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer' }}
       >
         View Official X-Ray PDF
       </button>
+    </motion.div>
+  )
+}
+
+/** Annual-cycle progress as % of time elapsed between the last exam and the next
+ * due date — a real derived value from the two dates the API already returns,
+ * not a fabricated metric. Null when there's no exam yet to measure from, or
+ * the window is degenerate (due date not after exam date). */
+function cycleProgress(examDate: string | null, dueDate: string): number | null {
+  if (!examDate) return null
+  const start = new Date(examDate).getTime()
+  const end = new Date(dueDate).getTime()
+  if (!(end > start)) return null
+  const pct = Math.round(((Date.now() - start) / (end - start)) * 100)
+  return Math.min(100, Math.max(0, pct))
+}
+
+function daysUntil(dueDate: string): number {
+  const end = new Date(dueDate).setHours(0, 0, 0, 0)
+  const now = new Date().setHours(0, 0, 0, 0)
+  return Math.round((end - now) / 86400000)
+}
+
+function dueDateFootnote(days: number): string {
+  if (days > 0) return `Next requirement window opens in ${days} day${days === 1 ? '' : 's'}.`
+  if (days === 0) return 'Next requirement is due today.'
+  return `Next requirement is ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue.`
+}
+
+/** Desktop-only unified dashboard for STAFF's own record — replaces the old
+ * StaffCard-in-a-grid layout (a single card stranded in a 3-column grid, mostly
+ * empty background) with one full-width panel: header, stat row, cycle
+ * progress, actions. Built directly from the TrackerEntry the API returns
+ * (not the StaffMember shape StaffCard/MobileStaffCard use) since it needs
+ * dueDate and the raw examDate for the progress calculation. */
+function MyComplianceDashboard({ record, onView, onUpload }: { record: TrackerEntry; onView: () => void; onUpload: () => void }) {
+  const initials = record.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  const xray = toCxrStatus(record.cxrResult)
+  const genexpert = toGenexpertStatus(record.genexpertResult)
+  const hasExam = record.examDate !== null
+  const progress = cycleProgress(record.examDate, record.dueDate)
+  const due = daysUntil(record.dueDate)
+
+  const pill = record.clinicalStatus === 'CRITICAL'
+    ? { label: 'Critical — Review Required', color: '#feb2b2', bg: 'rgba(229,62,62,0.22)' }
+    : record.status === 'OVERDUE'
+    ? { label: 'Overdue', color: '#feb2b2', bg: 'rgba(229,62,62,0.22)' }
+    : record.status === 'NON_COMPLIANT'
+    ? { label: 'Non-Compliant', color: '#e2e8f0', bg: 'rgba(203,213,224,0.22)' }
+    : record.status === 'PENDING'
+    ? { label: 'Pending Review', color: '#f6e05e', bg: 'rgba(246,224,94,0.22)' }
+    : { label: 'Compliant This Cycle', color: '#4ade80', bg: 'rgba(74,222,128,0.22)' }
+
+  const statCells: { label: string; node: ReactNode }[] = [
+    { label: 'Chest X-Ray', node: <StatusBadge status={xray} /> },
+    { label: 'GeneXpert', node: <StatusBadge status={genexpert} /> },
+    { label: 'Exam Date', node: <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151' }}>{formatExamDate(record.examDate)}</span> },
+    {
+      label: 'Next Requirement Due',
+      node: (
+        <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151' }}>
+          {formatExamDate(record.dueDate)}
+          <span style={{ display: 'block', fontFamily: 'Public Sans,sans-serif', fontSize: 12, fontWeight: 600, color: '#a0aec0', marginTop: 3 }}>
+            {due > 0 ? `In ${due} day${due === 1 ? '' : 's'}` : due === 0 ? 'Due today' : `${Math.abs(due)} day${Math.abs(due) === 1 ? '' : 's'} overdue`}
+          </span>
+        </span>
+      ),
+    },
+  ]
+
+  return (
+    <motion.div
+      custom={0}
+      variants={fadeRise}
+      initial="hidden"
+      animate="visible"
+      style={{ background: '#fff', borderRadius: 24, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', overflow: 'hidden' }}
+    >
+      <div style={{ background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', color: '#fff', padding: '34px 36px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
+          <div style={{ width: 58, height: 58, borderRadius: 14, background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 19, flexShrink: 0 }}>
+            {initials}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, textTransform: 'uppercase' }}>{record.fullName}</div>
+            <div style={{ fontSize: 13, color: '#cbd5e0', marginTop: 4 }}>{record.employeeId} • {record.jobTitle ?? '—'} • {record.department.name}</div>
+          </div>
+        </div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: pill.bg, color: pill.color, borderRadius: 999, padding: '7px 16px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: pill.color, display: 'inline-block', flexShrink: 0 }} />
+          {pill.label}
+        </span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        {statCells.map((s, i) => (
+          <div key={s.label} style={{ padding: '26px 28px', borderRight: i < statCells.length - 1 ? '1px solid #e2e8f0' : 'none', borderBottom: '1px solid #e2e8f0' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{s.label}</div>
+            {s.node}
+          </div>
+        ))}
+      </div>
+
+      {progress !== null && (
+        <div style={{ padding: '26px 32px', borderBottom: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 12 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Annual Cycle Progress</span>
+            <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#2f855a', flexShrink: 0 }}>{progress}%</span>
+          </div>
+          <div style={{ height: 10, background: '#f8fafc', borderRadius: 999, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(to right, #2f855a, #008d46)', borderRadius: 999 }} />
+          </div>
+          <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 10 }}>{dueDateFootnote(due)}</div>
+        </div>
+      )}
+
+      <div style={{ padding: '26px 32px', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        {hasExam && (
+          <motion.button
+            onClick={onView}
+            whileHover={{ filter: 'brightness(1.1)' }}
+            whileTap={{ scale: 0.98 }}
+            style={{ flex: 1, minWidth: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#1f3151', color: '#fff', border: 'none', borderRadius: 12, padding: '17px 0', minHeight: 44, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', cursor: 'pointer' }}
+          >
+            View Official X-Ray PDF
+          </motion.button>
+        )}
+        <motion.button
+          onClick={onUpload}
+          whileHover={{ background: '#f8fafc' }}
+          whileTap={{ scale: 0.98 }}
+          style={{ flex: 1, minWidth: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#fff', color: '#1f3151', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: hasExam ? '15.5px 0' : '17px 0', minHeight: 44, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', cursor: 'pointer' }}
+        >
+          Upload New Result
+        </motion.button>
+      </div>
+    </motion.div>
+  )
+}
+
+/** Mobile-native version of MyComplianceDashboard — same header/stats/progress/actions
+ * shape, stacked instead of laid out in a wide header + 4-column row, and with the
+ * action buttons stacked full-width instead of side by side (matches MobileStaffCard's
+ * own stacked single "View Official X-Ray PDF" button convention). */
+function MyComplianceDashboardMobile({ record, onView, onUpload }: { record: TrackerEntry; onView: () => void; onUpload: () => void }) {
+  const initials = record.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+  const xray = toCxrStatus(record.cxrResult)
+  const genexpert = toGenexpertStatus(record.genexpertResult)
+  const hasExam = record.examDate !== null
+  const progress = cycleProgress(record.examDate, record.dueDate)
+  const due = daysUntil(record.dueDate)
+
+  const pill = record.clinicalStatus === 'CRITICAL'
+    ? { label: 'Critical', color: '#feb2b2', bg: 'rgba(229,62,62,0.22)' }
+    : record.status === 'OVERDUE'
+    ? { label: 'Overdue', color: '#feb2b2', bg: 'rgba(229,62,62,0.22)' }
+    : record.status === 'NON_COMPLIANT'
+    ? { label: 'Non-Compliant', color: '#e2e8f0', bg: 'rgba(203,213,224,0.22)' }
+    : record.status === 'PENDING'
+    ? { label: 'Pending', color: '#f6e05e', bg: 'rgba(246,224,94,0.22)' }
+    : { label: 'Compliant', color: '#4ade80', bg: 'rgba(74,222,128,0.22)' }
+
+  return (
+    <motion.div
+      custom={1}
+      variants={fadeRise}
+      initial="hidden"
+      animate="visible"
+      style={{ background: '#fff', borderRadius: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', overflow: 'hidden' }}
+    >
+      <div style={{ background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', color: '#fff', padding: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
+            {initials}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, textTransform: 'uppercase', lineHeight: 1.2 }}>{record.fullName}</div>
+            <div style={{ fontSize: 12, color: '#cbd5e0', marginTop: 2 }}>{record.employeeId} • {record.jobTitle ?? '—'}</div>
+          </div>
+        </div>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: pill.bg, color: pill.color, borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: pill.color, display: 'inline-block', flexShrink: 0 }} />
+          {pill.label}
+        </span>
+      </div>
+
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
+          <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Chest X-Ray</div>
+            <StatusBadge status={xray} />
+          </div>
+          <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>GeneXpert</div>
+            <StatusBadge status={genexpert} />
+          </div>
+          <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Exam Date</div>
+            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#1f3151' }}>{formatExamDate(record.examDate)}</div>
+          </div>
+          <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Next Due</div>
+            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#1f3151' }}>{formatExamDate(record.dueDate)}</div>
+          </div>
+        </div>
+
+        {progress !== null && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, gap: 12 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cycle Progress</span>
+              <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#2f855a', flexShrink: 0 }}>{progress}%</span>
+            </div>
+            <div style={{ height: 8, background: '#f8fafc', borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(to right, #2f855a, #008d46)', borderRadius: 999 }} />
+            </div>
+            <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 8 }}>{dueDateFootnote(due)}</div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {hasExam && (
+            <button
+              onClick={onView}
+              style={{ width: '100%', background: '#1f3151', color: '#fff', border: 'none', borderRadius: 12, padding: 12, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer' }}
+            >
+              View Official X-Ray PDF
+            </button>
+          )}
+          <button
+            onClick={onUpload}
+            style={{ width: '100%', background: '#fff', color: '#1f3151', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: 12, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer' }}
+          >
+            Upload New Result
+          </button>
+        </div>
+      </div>
     </motion.div>
   )
 }
@@ -300,7 +537,7 @@ function AdminStaffRow({ staff, index }: { staff: AdminStaffEntry; index: number
         <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{staff.name}</div>
         <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{staff.dept.toUpperCase()} • {staff.id}</div>
       </div>
-      <span style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 999, padding: '6px 14px', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>
+      <span style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 999, padding: '6px 14px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>
         {staff.status}
       </span>
     </motion.div>
@@ -328,7 +565,7 @@ function CustomDropdown({ value, onChange, options }: { value: string, onChange:
     <div className="w-full sm:w-60" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', border: 'none', borderRadius: 999, fontSize: 14, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', background: '#f8fafc', cursor: 'pointer', outline: 'none' }}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', minHeight: 44, border: 'none', borderRadius: 999, fontSize: 14, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', background: '#f8fafc', cursor: 'pointer', outline: 'none' }}
       >
         {value}
         <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }} style={{ display: 'flex' }}>
@@ -349,7 +586,7 @@ function CustomDropdown({ value, onChange, options }: { value: string, onChange:
               <button
                 key={opt}
                 onClick={() => { onChange(opt); setIsOpen(false) }}
-                style={{ width: '100%', padding: '12px 20px', border: 'none', background: 'transparent', color: value === opt ? '#008d46' : '#4a5568', fontSize: 14, fontFamily: 'Public Sans,sans-serif', textAlign: 'left', cursor: 'pointer', fontWeight: value === opt ? 600 : 400, transition: 'background 0.15s, color 0.15s' }}
+                style={{ width: '100%', padding: '12px 20px', minHeight: 44, border: 'none', background: 'transparent', color: value === opt ? '#008d46' : '#4a5568', fontSize: 14, fontFamily: 'Public Sans,sans-serif', textAlign: 'left', cursor: 'pointer', fontWeight: value === opt ? 600 : 400, transition: 'background 0.15s, color 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#1f3151' }}
                 onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = value === opt ? '#008d46' : '#4a5568' }}
               >
@@ -370,6 +607,7 @@ function apiErrorMessage(err: unknown, fallback: string) {
 }
 
 export default function Compliance() {
+  const router = useRouter()
   const [search, setSearch] = useState('')
   const [dept, setDept] = useState(ALL_DEPARTMENTS)
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null)
@@ -471,11 +709,15 @@ export default function Compliance() {
           <div className="sm:hidden">
             <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 16 }}>
               <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>My Compliance</h1>
-              <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Personal Pulmonary Record</div>
+              <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Personal Pulmonary Record</div>
             </motion.div>
-            {loading && <SkeletonStaffCard />}
+            {loading && <SkeletonCard height={180} />}
             {!loading && myRecord && (
-              <MobileStaffCard staff={toStaffMember(myRecord)} index={1} onView={() => setSelectedStaff(toStaffMember(myRecord))} />
+              <MyComplianceDashboardMobile
+                record={myRecord}
+                onView={() => setSelectedStaff(toStaffMember(myRecord))}
+                onUpload={() => router.push('/upload')}
+              />
             )}
           </div>
 
@@ -485,15 +727,13 @@ export default function Compliance() {
               <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>My Compliance Record</h1>
               <p style={{ fontSize: 14, color: '#718096', marginBottom: 0 }}>Your personal pulmonary surveillance status for the current annual cycle.</p>
             </motion.div>
-            {loading && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                <SkeletonStaffCard />
-              </div>
-            )}
+            {loading && <SkeletonCard height={220} />}
             {!loading && myRecord && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                <StaffCard staff={toStaffMember(myRecord)} index={0} onView={() => setSelectedStaff(toStaffMember(myRecord))} />
-              </div>
+              <MyComplianceDashboard
+                record={myRecord}
+                onView={() => setSelectedStaff(toStaffMember(myRecord))}
+                onUpload={() => router.push('/upload')}
+              />
             )}
           </div>
         </>
@@ -506,9 +746,9 @@ export default function Compliance() {
                 <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                   <div>
                     <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Staff Directory</h1>
-                    <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Real-Time Personnel Status</div>
+                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Real-Time Personnel Status</div>
                   </div>
-                  <button onClick={() => setShowStatusGuide(true)} aria-label="Help" style={{ width: 32, height: 32, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                  <button onClick={() => setShowStatusGuide(true)} aria-label="Help" style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
                     <HelpCircle size={17} />
                   </button>
                 </motion.div>
@@ -530,7 +770,7 @@ export default function Compliance() {
                       <button
                         key={f.value}
                         onClick={() => setDept(f.value)}
-                        style={{ flexShrink: 0, background: active ? '#1d3d93' : '#fff', color: active ? '#fff' : '#718096', border: 'none', borderRadius: 999, padding: '10px 18px', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: active ? 'none' : '0 2px 6px rgba(0,0,0,0.04)' }}
+                        style={{ flexShrink: 0, background: active ? '#1d3d93' : '#fff', color: active ? '#fff' : '#718096', border: 'none', borderRadius: 999, padding: '10px 18px', minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: active ? 'none' : '0 2px 6px rgba(0,0,0,0.04)' }}
                       >
                         {f.label.toUpperCase()}
                       </button>
@@ -548,9 +788,9 @@ export default function Compliance() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{s.name}</div>
-                        <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>{s.dept.toUpperCase()} • {s.id}</div>
+                        <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{s.dept.toUpperCase()} • {s.id}</div>
                       </div>
-                      <span style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 999, padding: '5px 12px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      <span style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>
                         {s.status}
                       </span>
                     </motion.div>
@@ -564,7 +804,7 @@ export default function Compliance() {
               <>
                 <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 16 }}>
                   <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Tracker</h1>
-                  <div style={{ fontSize: 11, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Department Database</div>
+                  <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Department Database</div>
                 </motion.div>
 
                 {loading && [0, 1, 2, 3, 4].map(i => <SkeletonListRow key={i} />)}
@@ -591,11 +831,11 @@ export default function Compliance() {
                     <button
                       onClick={handleRunScan}
                       disabled={scanning}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1f3151', border: 'none', borderRadius: 999, padding: '10px 18px', cursor: scanning ? 'default' : 'pointer', color: '#fff', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', opacity: scanning ? 0.75 : 1 }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#1f3151', border: 'none', borderRadius: 999, padding: '10px 18px', minHeight: 44, cursor: scanning ? 'default' : 'pointer', color: '#fff', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', opacity: scanning ? 0.75 : 1 }}
                     >
                       {scanning ? 'Scanning…' : 'Run Compliance Scan'}
                     </button>
-                    <button onClick={() => setShowStatusGuide(true)} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 999, padding: '10px 18px', cursor: 'pointer', color: '#4a5568', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                    <button onClick={() => setShowStatusGuide(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 999, padding: '10px 18px', minHeight: 44, cursor: 'pointer', color: '#4a5568', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                       <HelpCircle size={16} /> Status Guide
                     </button>
                   </div>
@@ -688,7 +928,7 @@ export default function Compliance() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', letterSpacing: '0.02em', textTransform: 'uppercase' }}>Staff Record</span>
-                <button onClick={() => setSelectedStaff(null)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                <button onClick={() => setSelectedStaff(null)} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
                   <X size={14} />
                 </button>
               </div>
@@ -699,7 +939,7 @@ export default function Compliance() {
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedStaff.name}</div>
-                  <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>{selectedStaff.id} • {selectedStaff.role}</div>
+                  <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{selectedStaff.id} • {selectedStaff.role}</div>
                 </div>
               </div>
 
@@ -712,17 +952,17 @@ export default function Compliance() {
                   const color = f.status === '—' ? '#a0aec0' : isAlert ? '#c53030' : '#2f855a'
                   return (
                     <div key={f.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '12px 14px' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{f.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{f.label}</span>
                       <span style={{ fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase' }}>{f.status}</span>
                     </div>
                   )
                 })}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '12px 14px' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Department</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Department</span>
                   <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedStaff.dept}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '12px 14px' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Last Exam Date</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Last Exam Date</span>
                   <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedStaff.exam !== '—' ? selectedStaff.exam.replace(' ', '. ') : '—'}</span>
                 </div>
               </div>
@@ -745,10 +985,10 @@ export default function Compliance() {
               onClick={e => e.stopPropagation()}
             >
               <div style={{ background: '#1c2538', padding: '28px 32px' }}>
-                <button onClick={() => setSelectedStaff(null)} style={{ position: 'absolute', top: 24, right: 24, background: 'none', border: 'none', cursor: 'pointer', color: '#a0aec0', padding: 4 }}>
+                <button onClick={() => setSelectedStaff(null)} style={{ position: 'absolute', top: 16, right: 16, width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#a0aec0' }}>
                   <X size={20} />
                 </button>
-                <div style={{ fontSize: 10, fontWeight: 800, color: '#4ade80', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: '#4ade80', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
                   VETERANS MEMORIAL MEDICAL CENTER
                 </div>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#fff' }}>
@@ -763,7 +1003,7 @@ export default function Compliance() {
                   </div>
                   <div>
                     <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 18, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', marginBottom: 2 }}>{selectedStaff.name}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{selectedStaff.id} • {selectedStaff.role}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{selectedStaff.id} • {selectedStaff.role}</div>
                   </div>
                 </div>
 
@@ -780,7 +1020,7 @@ export default function Compliance() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#a0aec0', letterSpacing: '0.05em', textTransform: 'uppercase' }}>DEPARTMENT:</span>
-                    <span style={{ background: '#e2e8f0', color: '#1f3151', borderRadius: 999, padding: '4px 12px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{selectedStaff.dept}</span>
+                    <span style={{ background: '#e2e8f0', color: '#1f3151', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{selectedStaff.dept}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: '#a0aec0', letterSpacing: '0.05em', textTransform: 'uppercase' }}>LAST EXAM DATE:</span>
@@ -831,7 +1071,7 @@ export default function Compliance() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', letterSpacing: '0.02em' }}>STATUS DIFFERENCE GUIDE</span>
-                <button onClick={() => setShowStatusGuide(false)} style={{ width: 28, height: 28, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                <button onClick={() => setShowStatusGuide(false)} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
                   <X size={14} />
                 </button>
               </div>

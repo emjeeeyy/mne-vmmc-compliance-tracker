@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EscalationsService } from '../escalations/escalations.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { EmailChannel } from './channels/email.channel';
 import { ChannelResult } from './channels/sms.channel';
 import { SmsChannel } from './channels/sms.channel';
+import { buildEventEmail } from './email-templates/event.template';
 import { DispatchedEvent } from './types';
 
 interface EmployeeRecipient {
@@ -20,7 +22,7 @@ const SUBTYPE_LABELS: Record<string, string> = {
   FIRST_REMINDER: 'Reminder: your annual clearance window is open — please submit your results.',
   BIRTHDAY_DUE: 'Your clearance is due today — please submit your results as soon as possible.',
   WEEKLY_REMINDER: 'Reminder: your annual clearance is still pending.',
-  THREE_MONTH_HR_NOTICE: 'HR notice: this employee has remained non-compliant for 3 months after their birthday and requires follow-up.',
+  THREE_MONTH_HR_NOTICE: "You've been non-compliant for 3 months past your deadline. HR has been notified for follow-up — please submit your results immediately to resolve this.",
   SLA_BREACH: 'Your clearance deadline has passed without an approved submission.',
   CLINICAL_ALERT: 'Your submitted result requires immediate clinical review.',
 };
@@ -36,6 +38,7 @@ export class NotificationDispatcherService {
     private readonly smsChannel: SmsChannel,
     private readonly emailChannel: EmailChannel,
     private readonly escalationsService: EscalationsService,
+    private readonly configService: ConfigService,
   ) {}
 
   async handleEvent(event: DispatchedEvent) {
@@ -48,11 +51,28 @@ export class NotificationDispatcherService {
     if (!employee) return;
 
     const body = SUBTYPE_LABELS[event.event_subtype] ?? event.message;
+    // INFORMATIONAL (WINDOW_OPENED, CLEARANCE_RECORDED) stays in-app only, deliberately —
+    // these require no action, so emailing/texting every staff member for them would just
+    // be noise. Only WARNING/EXCEPTION (anything that needs a response) goes out further.
     const channels: ('IN_APP' | 'SMS' | 'EMAIL')[] =
       event.event_type === 'INFORMATIONAL' ? ['IN_APP'] : ['IN_APP', 'SMS', 'EMAIL'];
 
+    // Only the email template's detail table needs this — fetched once here rather
+    // than per-channel, and only when there's actually a compliance record to read from
+    // (PEP/immunization/document-rejection events have none).
+    let dueDate: string | null = null;
+    if (event.compliance_record_id) {
+      const { data: record } = await this.supabaseService
+        .getClient()
+        .from('compliance_records')
+        .select('due_date')
+        .eq('id', event.compliance_record_id)
+        .maybeSingle<{ due_date: string }>();
+      dueDate = record?.due_date ?? null;
+    }
+
     for (const channel of channels) {
-      await this.dispatchOne(channel, event, employee, body);
+      await this.dispatchOne(channel, event, employee, body, dueDate);
     }
 
     if (event.event_type === 'EXCEPTION') {
@@ -92,6 +112,7 @@ export class NotificationDispatcherService {
     event: DispatchedEvent,
     employee: EmployeeRecipient,
     body: string,
+    dueDate: string | null,
   ) {
     let recipient: string | null;
     let result: ChannelResult;
@@ -106,9 +127,20 @@ export class NotificationDispatcherService {
         : { status: 'FAILED', providerRef: null, retryCount: 0 };
     } else {
       recipient = employee.email;
-      result = recipient
-        ? await this.emailChannel.send(recipient, 'VMMC TB DOTS Notification', body)
-        : { status: 'FAILED', providerRef: null, retryCount: 0 };
+      if (recipient) {
+        const email = buildEventEmail({
+          name: employee.full_name,
+          employeeId: employee.employee_id,
+          subtype: event.event_subtype,
+          message: body,
+          detectedAt: new Date(event.detected_at),
+          dueDate,
+          appBaseUrl: this.configService.get<string>('CORS_ORIGIN') ?? 'http://localhost:3000',
+        });
+        result = await this.emailChannel.send(recipient, email.subject, email.text, email.html);
+      } else {
+        result = { status: 'FAILED', providerRef: null, retryCount: 0 };
+      }
     }
 
     const { error } = await this.supabaseService.getClient().from('notifications').insert({

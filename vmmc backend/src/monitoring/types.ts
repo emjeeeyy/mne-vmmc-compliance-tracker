@@ -10,7 +10,8 @@ export type EventSubtype =
   | 'SLA_BREACH'
   | 'CLINICAL_ALERT'
   | 'PEP_FOLLOWUP_MISSED'
-  | 'IMMUNIZATION_OVERDUE';
+  | 'IMMUNIZATION_OVERDUE'
+  | 'DOCUMENT_REJECTED';
 
 export interface ComplianceRecordRow {
   id: string;

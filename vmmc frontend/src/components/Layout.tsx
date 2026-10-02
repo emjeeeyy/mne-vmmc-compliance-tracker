@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import VmmcSeal from './VmmcSeal'
-import { Home, ClipboardList, Upload, UserCircle, ChevronDown, Menu, X, Folder, Bell, User, Users, FileText, LogOut } from 'lucide-react'
+import { Home, ClipboardList, Upload, UserCircle, ChevronDown, Menu, X, Folder, Bell, User, Users, FileText, LogOut, ShieldAlert } from 'lucide-react'
 import { getRole, getUser, getInitials, logout } from '@/lib/auth'
 import { api } from '@/lib/api'
 
@@ -45,7 +45,7 @@ function NotificationPanel({ notifications }: { notifications: NotificationItem[
       transition={{ duration: 0.15, ease: 'easeOut' }}
       style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, width: 320, maxWidth: '85vw', maxHeight: 400, overflowY: 'auto', background: '#fff', borderRadius: 16, boxShadow: '0 12px 32px rgba(0,0,0,0.15)', border: '1px solid #e2e8f0', padding: 8, zIndex: 60 }}
     >
-      <div style={{ fontSize: 11, fontWeight: 800, color: '#a0aec0', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '10px 12px 6px' }}>
+      <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '10px 12px 6px' }}>
         Notifications
       </div>
       {notifications.length === 0 ? (
@@ -59,7 +59,7 @@ function NotificationPanel({ notifications }: { notifications: NotificationItem[
                 <div style={{ width: 8, height: 8, borderRadius: '50%', background: style.color, marginTop: 5, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, color: '#1f3151', fontWeight: 600, lineHeight: 1.4 }}>{n.message}</div>
-                  <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 4 }}>{timeAgo(n.createdAt)}</div>
+                  <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 4 }}>{timeAgo(n.createdAt)}</div>
                 </div>
               </div>
             )
@@ -77,17 +77,19 @@ const navItems = [
   { label: 'Profile Settings', shortLabel: 'Profile', path: '/profile', icon: UserCircle, mobileIcon: UserCircle },
 ]
 
-/** All four admin nav items now have real destinations, each reusing the
+/** All five admin nav items now have real destinations, each reusing the
  * matching staff route with content branched by role (see Dashboard.tsx /
- * Compliance.tsx / Upload.tsx / Profile.tsx). */
+ * Compliance.tsx / Upload.tsx / Profile.tsx) — except pii-index, which is
+ * ADMIN-only end to end and has no staff-facing equivalent at all. */
 const adminMobileNavItems = [
   { shortLabel: 'Home', path: '/dashboard', icon: Home },
   { shortLabel: 'Staff', path: '/compliance', icon: Users },
   { shortLabel: 'Queue', path: '/upload', icon: FileText },
+  { shortLabel: 'PII', path: '/pii-index', icon: ShieldAlert },
   { shortLabel: 'Admin', path: '/profile', icon: UserCircle },
 ]
 
-/** Desktop sidebar equivalent of adminMobileNavItems — same 4 destinations,
+/** Desktop sidebar equivalent of adminMobileNavItems — same 5 destinations,
  * full labels matching each screen's actual admin heading (Compliance.tsx's
  * admin heading is "Staff Directory", Upload.tsx's is "Review Queue", etc.)
  * rather than reusing staff's `navItems` labels, which describe different
@@ -96,6 +98,7 @@ const adminNavItems = [
   { label: 'Home Dashboard', path: '/dashboard', icon: Home },
   { label: 'Staff Directory', path: '/compliance', icon: Users },
   { label: 'Review Queue', path: '/upload', icon: FileText },
+  { label: 'PII Information Index', path: '/pii-index', icon: ShieldAlert },
   { label: 'Admin Profile', path: '/profile', icon: UserCircle },
 ]
 
@@ -159,12 +162,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           {role === 'admin' ? (
             <>
               <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#1f3151', letterSpacing: '0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>ADMIN PANEL</div>
-              <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>Management Portal</div>
+              <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>Management Portal</div>
             </>
           ) : (
             <>
               <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#1f3151', letterSpacing: '0.01em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{fullName}</div>
-              <div style={{ fontSize: 11, color: '#a0aec0', marginTop: 2 }}>VMMC Staff ID: {employeeId}</div>
+              <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>VMMC Staff ID: {employeeId}</div>
             </>
           )}
         </div>
@@ -172,14 +175,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <button
             onClick={() => setNotificationsOpen(v => !v)}
             aria-label="Notifications"
-            style={{ position: 'relative', background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', padding: 4, display: 'flex' }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: -4 }}
           >
-            <Bell size={20} />
-            {notifications.length > 0 && (
-              <span style={{ position: 'absolute', top: 0, right: 0, minWidth: 16, height: 16, borderRadius: 999, background: '#e53e3e', color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
-                {notifications.length > 9 ? '9+' : notifications.length}
-              </span>
-            )}
+            <span style={{ position: 'relative', display: 'flex' }}>
+              <Bell size={20} />
+              {notifications.length > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 999, background: '#e53e3e', color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px' }}>
+                  {notifications.length > 9 ? '9+' : notifications.length}
+                </span>
+              )}
+            </span>
           </button>
           <AnimatePresence>
             {notificationsOpen && <NotificationPanel notifications={notifications} />}
@@ -187,54 +192,49 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* Tablet / desktop top bar */}
+      {/* Tablet / desktop top bar — streamlined into a compact welcome bar per the
+          Aug 31 feedback ("reduce the upperboard... streamline as compact welcome bar"):
+          the institutional "Veterans Memorial Medical Center / Admin Management Portal"
+          block was pure duplication of context already visible in the left-side branding
+          and the profile pill's own role label, so it's replaced with a personal greeting
+          instead of two more lines of boilerplate. Height trimmed 68→60 to match. */}
       <header
         className="hidden sm:flex px-4 sm:px-6"
-        style={{ background: '#1c2538', height: 68, alignItems: 'center', flexShrink: 0 }}
+        style={{ background: '#1c2538', height: 60, alignItems: 'center', flexShrink: 0 }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button
             onClick={() => setMobileNavOpen(v => !v)}
             className="flex lg:hidden"
             aria-label="Toggle navigation menu"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', padding: 4 }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#fff', width: 44, height: 44, alignItems: 'center', justifyContent: 'center', marginLeft: -8 }}
           >
             {mobileNavOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
-          <VmmcSeal size={42} />
-          <div className="hidden sm:block" style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.15)' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, lineHeight: 1.1 }}>
-              <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 19, fontWeight: 800, color: '#4ade80', letterSpacing: '0.02em' }}>VMMC</span>
-              <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 19, fontWeight: 800, color: '#fff', letterSpacing: '0.02em' }}>SURVEILLANCE</span>
-            </div>
-            <div className="hidden sm:block" style={{ fontSize: 10, color: '#e2e8f0', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 4, fontWeight: 600 }}>
-              TB DOTS &amp; PULMONARY COMPLIANCE REGISTRY
-            </div>
-          </div>
+          <VmmcSeal size={36} />
+          <div className="hidden sm:block" style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.15)' }} />
+          <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 17, fontWeight: 800, letterSpacing: '0.02em' }}>
+            <span style={{ color: '#4ade80' }}>VMMC</span> <span style={{ color: '#fff' }}>SURVEILLANCE</span>
+          </span>
         </div>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
-          <div className="hidden lg:block" style={{ textAlign: 'right', marginRight: 24 }}>
-            <div style={{ color: '#fff', fontSize: 13, fontWeight: 600, lineHeight: 1.2, whiteSpace: 'nowrap' }}>Veterans Memorial Medical Center</div>
-            {role === 'admin' ? (
-              <div style={{ color: '#a0aec0', fontSize: 11, fontWeight: 500, marginTop: 4, whiteSpace: 'nowrap' }}>Admin Management Portal</div>
-            ) : (
-              <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 500, marginTop: 4, whiteSpace: 'nowrap' }}>Staff Personal Surveillance Dashboard</div>
-            )}
+          <div className="hidden lg:block" style={{ marginRight: 24 }}>
+            <span style={{ color: '#e2e8f0', fontSize: 13, fontWeight: 500 }}>Welcome back, </span>
+            <span style={{ color: '#fff', fontSize: 13, fontWeight: 700 }}>{fullName.split(' ')[0] || (role === 'admin' ? 'Admin' : 'there')}</span>
           </div>
 
-          <div className="hidden lg:block" style={{ width: 1, height: 34, background: 'rgba(255,255,255,0.15)', marginRight: 24 }} />
+          <div className="hidden lg:block" style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.15)', marginRight: 24 }} />
 
           <div style={{ position: 'relative', marginRight: 20 }} onClick={e => e.stopPropagation()}>
             <button
               onClick={() => setNotificationsOpen(v => !v)}
               aria-label="Notifications"
-              style={{ position: 'relative', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 999, width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}
+              style={{ position: 'relative', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 999, width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}
             >
               <Bell size={18} />
               {notifications.length > 0 && (
-                <span style={{ position: 'absolute', top: -2, right: -2, minWidth: 16, height: 16, borderRadius: 999, background: '#e53e3e', color: '#fff', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: '2px solid #1c2538' }}>
+                <span style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 999, background: '#e53e3e', color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px', border: '2px solid #1c2538' }}>
                   {notifications.length > 9 ? '9+' : notifications.length}
                 </span>
               )}
@@ -254,7 +254,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg, #4299e1 0%, #1f3151 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 13, color: '#fff', flexShrink: 0 }}>{getInitials(fullName)}</div>
                   <div className="hidden sm:block" style={{ textAlign: 'left' }}>
                     <div style={{ color: '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap' }}>{fullName}</div>
-                    <div style={{ color: '#63b3ed', fontSize: 11, fontWeight: 500, marginTop: 2, whiteSpace: 'nowrap' }}>{jobTitle}</div>
+                    <div style={{ color: '#63b3ed', fontSize: 12, fontWeight: 500, marginTop: 2, whiteSpace: 'nowrap' }}>{jobTitle}</div>
                   </div>
                 </>
               ) : (
@@ -262,7 +262,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'linear-gradient(135deg, #4ade80 0%, #064e3b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 13, color: '#fff', flexShrink: 0 }}>{getInitials(fullName)}</div>
                   <div className="hidden sm:block" style={{ textAlign: 'left' }}>
                     <div style={{ color: '#fff', fontSize: 13, fontWeight: 700, lineHeight: 1.2, whiteSpace: 'nowrap' }}>{fullName}</div>
-                    <div style={{ color: '#4ade80', fontSize: 11, fontWeight: 500, marginTop: 2, whiteSpace: 'nowrap' }}>{jobTitle}</div>
+                    <div style={{ color: '#4ade80', fontSize: 12, fontWeight: 500, marginTop: 2, whiteSpace: 'nowrap' }}>{jobTitle}</div>
                   </div>
                 </>
               )}
@@ -282,7 +282,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 >
                   <button
                     onClick={handleLogout}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'none', border: 'none', cursor: 'pointer', color: '#e53e3e', fontSize: 13, fontWeight: 700, fontFamily: 'Public Sans, sans-serif', textAlign: 'left', borderRadius: 10, transition: 'background 0.15s' }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', minHeight: 44, background: 'none', border: 'none', cursor: 'pointer', color: '#e53e3e', fontSize: 13, fontWeight: 700, fontFamily: 'Public Sans, sans-serif', textAlign: 'left', borderRadius: 10, transition: 'background 0.15s' }}
                     onMouseEnter={e => { e.currentTarget.style.background = '#fff5f5' }}
                     onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
                   >
@@ -311,7 +311,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           className={`hidden sm:block fixed top-[68px] bottom-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-out lg:static lg:top-auto lg:bottom-auto lg:z-auto lg:w-[250px] lg:translate-x-0 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full'}`}
           style={{ background: '#1f3151', flexShrink: 0, padding: '32px 0', overflowY: 'auto' }}
         >
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#a0aec0', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '0 32px', marginBottom: 20 }}>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '0 32px', marginBottom: 20 }}>
             NAVIGATION MENU
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -357,7 +357,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   key={shortLabel}
                   onClick={() => path && goTo(path)}
                   aria-label={shortLabel}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: isActive ? '#00b06b' : 'transparent', border: 'none', borderRadius: 999, padding: isActive ? '10px 16px' : '10px 12px', color: '#fff', cursor: path ? 'pointer' : 'default', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: isActive ? '#00b06b' : 'transparent', border: 'none', borderRadius: 999, padding: isActive ? '10px 16px' : '10px 12px', minHeight: 44, color: '#fff', cursor: path ? 'pointer' : 'default', transition: 'background 0.2s' }}
                 >
                   <Icon size={20} />
                   {isActive && <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'Poppins,sans-serif', whiteSpace: 'nowrap' }}>{shortLabel}</span>}
@@ -371,7 +371,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                   key={path}
                   onClick={() => goTo(path)}
                   aria-label={shortLabel}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, background: isActive ? '#00b06b' : 'transparent', border: 'none', borderRadius: 999, padding: isActive ? '10px 16px' : '10px 12px', color: '#fff', cursor: 'pointer', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: isActive ? '#00b06b' : 'transparent', border: 'none', borderRadius: 999, padding: isActive ? '10px 16px' : '10px 12px', minHeight: 44, color: '#fff', cursor: 'pointer', transition: 'background 0.2s' }}
                 >
                   <Icon size={20} />
                   {isActive && <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'Poppins,sans-serif', whiteSpace: 'nowrap' }}>{shortLabel}</span>}
