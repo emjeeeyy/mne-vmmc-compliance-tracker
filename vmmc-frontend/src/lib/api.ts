@@ -1,6 +1,10 @@
 import { getToken } from './auth'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8443/api'
+// .trim() matters here, not just tidiness — pasting into a host's env-var textarea (Vercel,
+// Railway, etc.) commonly leaves a trailing newline in the value, which silently breaks every
+// request URL built from this constant. See the matching CORS_ORIGIN fix in the backend's main.ts
+// for where this exact failure mode actually took the whole API down.
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.trim() ?? 'http://localhost:8443/api'
 
 const REQUEST_TIMEOUT_MS = 10_000
 const MAX_RETRIES = 2

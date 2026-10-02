@@ -59,7 +59,7 @@ export function logout() {
   if (session) {
     // Best-effort session revoke — mirrors the backend's own best-effort logout.
     // Not awaited: the UI navigates away immediately either way.
-    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8443/api'}/auth/logout`, {
+    fetch(`${process.env.NEXT_PUBLIC_API_URL?.trim() ?? 'http://localhost:8443/api'}/auth/logout`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.accessToken}` },
     }).catch(() => {})

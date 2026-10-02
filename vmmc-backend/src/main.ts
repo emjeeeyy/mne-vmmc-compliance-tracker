@@ -22,8 +22,15 @@ async function bootstrap() {
   app.set('trust proxy', 1);
 
   app.use(helmet());
+  // .trim() is load-bearing, not defensive-programming paranoia: a Railway deploy crashed every
+  // single request with `TypeError [ERR_INVALID_CHAR]: Invalid character in header content
+  // ["Access-Control-Allow-Origin"]` because CORS_ORIGIN had a trailing newline from pasting into
+  // its (multi-line textarea) env var field — Node's http module rejects CR/LF in header values
+  // outright, by design, so cors() crashed trying to set this header on literally every response.
+  // Retyping the value in the dashboard reproduced the exact same crash twice, so don't rely on
+  // the env var being clean — strip it here instead of trusting whatever a web form hands back.
   app.enableCors({
-    origin: configService.get<string>('CORS_ORIGIN'),
+    origin: configService.get<string>('CORS_ORIGIN')?.trim(),
     credentials: true,
   });
   app.useGlobalPipes(
