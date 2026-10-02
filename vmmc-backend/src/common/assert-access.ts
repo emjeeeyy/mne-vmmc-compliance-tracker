@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { EmployeeContext } from '../auth/types/role';
 
 export type EmploymentType = 'PERMANENT' | 'COS';
@@ -9,23 +9,29 @@ export function buildEmployeeId(employmentType: EmploymentType, year: number, se
   return employmentType === 'COS' ? `VMMC-COS-${yearSuffix}-${sequenceSuffix}` : `VMMC-${yearSuffix}-${sequenceSuffix}`;
 }
 
+// BadRequestException, not a plain Error — AllExceptionsFilter deliberately sanitizes any
+// non-HttpException down to a generic "Internal server error." (500), a real security boundary
+// for genuinely unexpected crashes. A plain Error here meant this function's own specific,
+// correct messages ("Permanent employee ID must match VMMC-YY-NNNN.") never reached the user —
+// every bad-format signup attempt showed a scary 500 instead, caught live typing an email address
+// into the Employee ID field on signup instead of a real ID.
 export function validateEmployeeId(employeeId: string, expectedType?: EmploymentType): string {
   const normalized = employeeId?.trim();
-  if (!normalized) throw new Error('Employee ID is required.');
+  if (!normalized) throw new BadRequestException('Employee ID is required.');
 
   if (expectedType === 'COS' && !/^VMMC-COS-\d{2}-\d{4}$/i.test(normalized)) {
-    throw new Error('COS employee ID must match VMMC-COS-YY-NNNN.');
+    throw new BadRequestException('COS employee ID must match VMMC-COS-YY-NNNN.');
   }
 
   if (expectedType === 'PERMANENT' && !/^VMMC-\d{2}-\d{4}$/i.test(normalized)) {
-    throw new Error('Permanent employee ID must match VMMC-YY-NNNN.');
+    throw new BadRequestException('Permanent employee ID must match VMMC-YY-NNNN.');
   }
 
   if (/^VMMC-COS-\d{2}-\d{4}$/i.test(normalized) || /^VMMC-\d{2}-\d{4}$/i.test(normalized)) {
     return normalized.toUpperCase();
   }
 
-  throw new Error('Employee ID must match VMMC-YY-NNNN or VMMC-COS-YY-NNNN.');
+  throw new BadRequestException('Employee ID must match VMMC-YY-NNNN or VMMC-COS-YY-NNNN.');
 }
 
 /**
