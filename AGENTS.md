@@ -1,6 +1,6 @@
 # capstone-vmmc
 
-Root of a two-repo capstone project: `vmmc backend` (NestJS + Supabase) and `vmmc frontend` (Next.js), talking over a REST API. This root folder also holds the consolidated `e2e/` test suite, shared documentation (`docs/`), and repo-wide tooling config (root `package.json`, `.gitignore`, `playwright.config.ts`).
+Root of a two-repo capstone project: `vmmc-backend` (NestJS + Supabase) and `vmmc-frontend` (Next.js), talking over a REST API. This root folder also holds the consolidated `e2e/` test suite, shared documentation (`docs/`), and repo-wide tooling config (root `package.json`, `.gitignore`, `playwright.config.ts`).
 
 **Start with [`docs/HANDOFF.md`](docs/HANDOFF.md)** — current status, how to run it, test accounts, and what's actually left to do. [`docs/SYSTEM_ARCHITECTURE.md`](docs/SYSTEM_ARCHITECTURE.md) is the deep "how it works" doc; pair it with `docs/BACKEND_ARCHITECTURE.md` and `docs/FRONTEND_ARCHITECTURE.md`.
 
@@ -16,4 +16,4 @@ Don't wait to be asked — do this proactively, as part of finishing the change,
 
 ## Two independent repos, not a monorepo
 
-`vmmc backend` and `vmmc frontend` each own their own `package.json`, `node_modules`, and unit tests — this root's own `package.json` exists only to (a) run both dev servers with one command (`npm run dev`) and (b) hold the consolidated `e2e/` suite (`npm run test:e2e`), which is the one thing that legitimately spans both repos. Don't add cross-repo imports or shared source code between them — the only real contract between them is the REST API.
+`vmmc-backend` and `vmmc-frontend` each own their own `package.json`, `node_modules`, and unit tests — this root's own `package.json` exists only to (a) run both dev servers with one command (`npm run dev`) and (b) hold the consolidated `e2e/` suite (`npm run test:e2e`), which is the one thing that legitimately spans both repos. Don't add cross-repo imports or shared source code between them — the only real contract between them is the REST API.

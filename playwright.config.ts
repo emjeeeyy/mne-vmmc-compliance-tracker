@@ -33,18 +33,18 @@ export default defineConfig({
 
   // Reuses already-running dev servers locally (so this never fights a `npm run dev` you already
   // have open, and never triggers the "next build while a dev server is live" .next corruption
-  // issue documented in vmmc frontend/FRONTEND_STANDARDS.md §9). CI always starts both fresh.
+  // issue documented in vmmc-frontend/FRONTEND_STANDARDS.md §9). CI always starts both fresh.
   webServer: [
     {
-      command: 'npm --prefix "vmmc backend" run start:dev',
+      command: 'npm --prefix vmmc-backend run start:dev',
       url: `${BACKEND_URL}/api/health`,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },
     {
       command: process.env.CI
-        ? 'npm --prefix "vmmc frontend" run build && npm --prefix "vmmc frontend" run start'
-        : 'npm --prefix "vmmc frontend" run dev:webpack',
+        ? 'npm --prefix vmmc-frontend run build && npm --prefix vmmc-frontend run start'
+        : 'npm --prefix vmmc-frontend run dev:webpack',
       url: FRONTEND_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,

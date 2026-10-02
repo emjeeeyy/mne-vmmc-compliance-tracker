@@ -2,7 +2,7 @@
 
 This document exists so the team can open this repo cold and actually understand *why* it's built the way it is — not just where the files are. Read it top to bottom once, then use it as a reference. Pair it with [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md) for the whole-system view and [`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md) for how the UI consumes this API.
 
-> This document lives in `docs/`, but all repo-relative paths mentioned below (`src/...`, `supabase/...`, `scripts/...`, etc.) are relative to `vmmc backend/`, not to this file's own location.
+> This document lives in `docs/`, but all repo-relative paths mentioned below (`src/...`, `supabase/...`, `scripts/...`, etc.) are relative to `vmmc-backend/`, not to this file's own location.
 
 ---
 
@@ -381,7 +381,7 @@ This is the exact sequence `GET /me/performance-stats` was built in — use it a
 ## 12 · Running it locally
 
 ```bash
-cd "vmmc backend"
+cd "vmmc-backend"
 npm install
 cp .env.example .env   # fill in real Supabase project values
 npm run start:dev      # NestJS watch mode, http://localhost:8443/api

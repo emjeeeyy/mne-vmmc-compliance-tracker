@@ -1,5 +1,5 @@
 # This file covers the whole "Capstone VMMC" tree if it's ever git-init'd at this root level
-# (both vmmc backend/ and vmmc frontend/ have their own .gitignore too — nested .gitignore files
+# (both vmmc-backend/ and vmmc-frontend/ have their own .gitignore too — nested .gitignore files
 # are additive in git, so both apply regardless of where `git init` actually happens).
 
 # Dependencies

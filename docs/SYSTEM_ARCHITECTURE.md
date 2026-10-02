@@ -6,7 +6,7 @@ This is the top-level "understand the whole system" document. Read this first fo
 
 The original build plan this whole system was executed against is [`VMMC_TBDOTS_BuildSpec.md`](../VMMC_TBDOTS_BuildSpec.md) — worth reading once for the *requirements reasoning* (what conflicts existed between the original documentation and the inherited mock frontend, and how each was resolved) that these architecture docs don't repeat.
 
-> This document (and its two companions) lives in `docs/`, but all repo-relative paths mentioned below (`src/...`, `supabase/...`, etc.) are relative to `vmmc backend/` or `vmmc frontend/` as indicated — not to this file's own location.
+> This document (and its two companions) lives in `docs/`, but all repo-relative paths mentioned below (`src/...`, `supabase/...`, etc.) are relative to `vmmc-backend/` or `vmmc-frontend/` as indicated — not to this file's own location.
 
 ---
 
@@ -20,15 +20,15 @@ Veterans Memorial Medical Center needs to track TB (and related occupational-hea
 
 ```
 Capstone VMMC/
-├── vmmc backend/     NestJS API — the only thing that talks to Supabase
-├── vmmc frontend/    Next.js UI — talks only to the backend's REST API
+├── vmmc-backend/     NestJS API — the only thing that talks to Supabase
+├── vmmc-frontend/    Next.js UI — talks only to the backend's REST API
 └── VMMC_TBDOTS_BuildSpec.md
 ```
 
-They are **fully independent deployable units** connected by exactly one contract: the backend's REST API (documented live at `/api/docs`, and exported statically to `vmmc backend/openapi.json`). The frontend never talks to Supabase directly — no Supabase client, no Supabase keys anywhere in the frontend repo. This matters for the security story (§6): a compromised frontend build can't leak a service-role key, because it never has one.
+They are **fully independent deployable units** connected by exactly one contract: the backend's REST API (documented live at `/api/docs`, and exported statically to `vmmc-backend/openapi.json`). The frontend never talks to Supabase directly — no Supabase client, no Supabase keys anywhere in the frontend repo. This matters for the security story (§6): a compromised frontend build can't leak a service-role key, because it never has one.
 
 ```
- Browser                    vmmc frontend                  vmmc backend                  Supabase
+ Browser                    vmmc-frontend                  vmmc-backend                  Supabase
 ┌─────────┐   HTTPS       ┌──────────────┐   fetch()     ┌──────────────┐  supabase-js  ┌──────────┐
 │  User    │ ───────────▶ │  Next.js     │ ────────────▶ │  NestJS API  │ ────────────▶ │ Postgres │
 │          │ ◀─────────── │  (App Router)│ ◀──────────── │  (RBAC, M&E) │ ◀──────────── │ Auth     │
@@ -43,14 +43,14 @@ npm run dev
 
 # or manually, in two terminals:
 # terminal 1
-cd "vmmc backend" && npm run start:dev        # http://localhost:8443/api
+cd "vmmc-backend" && npm run start:dev        # http://localhost:8443/api
 
 # terminal 2
-cd "vmmc frontend" && npm run dev             # http://localhost:3000
+cd "vmmc-frontend" && npm run dev             # http://localhost:3000
 ```
 
 **Testing, at a glance:**
-- Each repo owns its own **unit tests**, run independently: `vmmc backend` (`npm test`, Jest, 51 tests) and `vmmc frontend` (`npm test`, Vitest, pure `src/lib/*` logic only — no jsdom/component rendering).
+- Each repo owns its own **unit tests**, run independently: `vmmc-backend` (`npm test`, Jest, 51 tests) and `vmmc-frontend` (`npm test`, Vitest, pure `src/lib/*` logic only — no jsdom/component rendering).
 - **End-to-end tests are consolidated in one place**: `e2e/` at this repo's root, run via `npm run test:e2e`. `e2e/api/` hits the backend directly over real HTTP (Playwright's `request` fixture, no browser); `e2e/ui/` drives the real frontend in a real browser. One Playwright suite, one command, covering both repos — not split per-repo like the unit tests are. See `BACKEND_ARCHITECTURE.md` §9 for why the backend's old NestJS-generated e2e test was retired rather than physically moved here (a real Node module-resolution wall, not just preference).
 The backend's `CORS_ORIGIN` env var must match the frontend's actual origin, and the frontend's `NEXT_PUBLIC_API_URL` must point at the backend — both `.env.example` files document the local-dev defaults, which already match each other out of the box.
 
@@ -81,7 +81,7 @@ Every one of those steps is a real, currently-working code path — not a descri
 
 **2. Build the backend piece first, in isolation, and prove it with curl before writing any UI.** (Full mechanics: backend doc §11.3.)
 ```ts
-// vmmc backend/src/me/profile.service.ts
+// vmmc-backend/src/me/profile.service.ts
 async getPerformanceStats(currentUser: EmployeeContext) {
   const { count: reviews } = await client.from('documents').select('id', { count: 'exact', head: true })
     .eq('reviewed_by', currentUser.id);
@@ -102,7 +102,7 @@ Then, **before touching the frontend at all**: `npx tsc --noEmit`, restart the d
 
 **3. Wire the frontend to the now-proven-working endpoint.** (Full mechanics: frontend doc §9.2–9.3.)
 ```tsx
-// vmmc frontend/src/screens/Profile.tsx
+// vmmc-frontend/src/screens/Profile.tsx
 const [performanceStats, setPerformanceStats] = useState<PerformanceStats>({ reviews: 0, approvals: 0, approvalRate: 0 })
 useEffect(() => {
   if (role !== 'admin') return
@@ -169,9 +169,9 @@ Two follow-up passes after Phase 12 closed out the last known mock gaps: the Com
 
 **A genuinely interesting finding from Phase 11 worth knowing about even if you don't read the backend doc in full:** the 50-concurrent-user stress test initially produced ~40% spurious login failures on *correct* credentials. The bug wasn't in any business logic — it was a shared, cached Supabase Auth client being reused across concurrent sign-in calls, corrupting internal state under load. The fix (construct a fresh client per sign-in) is a two-line change with an outsized lesson: **sequential manual testing will never catch a concurrency bug**, no matter how thoroughly you click through the app yourself.
 
-A third pass, after both follow-ups above, tightened up dev experience and real-world performance rather than adding features: the backend and frontend swapped dev ports (backend → 8443, frontend → 3000, matching the more conventional expectation that "the app" lives on 3000) and gained a root-level `npm run dev` that boots both together; a second identity-display bug was found and fixed — `Layout.tsx`'s header pill and `Profile.tsx`'s profile card still had `"Juan Dela Cruz, RN"` / `"Dr. Arturo V."` hardcoded from the original Figma mockup, never wired up when the rest of `Profile.tsx` moved to real data, so every logged-in user saw someone else's name — fixed by sourcing both from the same real fetched employee record, with real `birthDate`/computed age also wired through to the mobile profile card; a real performance problem was found and fixed in the Dashboard/Compliance Tracker endpoints (see the backend doc §9 for the two root causes and the before/after numbers); and the "Loading…" text on those same two screens was replaced with shape-matched skeleton placeholders (`vmmc frontend/src/components/Skeleton.tsx`).
+A third pass, after both follow-ups above, tightened up dev experience and real-world performance rather than adding features: the backend and frontend swapped dev ports (backend → 8443, frontend → 3000, matching the more conventional expectation that "the app" lives on 3000) and gained a root-level `npm run dev` that boots both together; a second identity-display bug was found and fixed — `Layout.tsx`'s header pill and `Profile.tsx`'s profile card still had `"Juan Dela Cruz, RN"` / `"Dr. Arturo V."` hardcoded from the original Figma mockup, never wired up when the rest of `Profile.tsx` moved to real data, so every logged-in user saw someone else's name — fixed by sourcing both from the same real fetched employee record, with real `birthDate`/computed age also wired through to the mobile profile card; a real performance problem was found and fixed in the Dashboard/Compliance Tracker endpoints (see the backend doc §9 for the two root causes and the before/after numbers); and the "Loading…" text on those same two screens was replaced with shape-matched skeleton placeholders (`vmmc-frontend/src/components/Skeleton.tsx`).
 
-A fourth pass focused on documentation, git hygiene, and testing infrastructure rather than app features: the three architecture docs moved into a shared `docs/` folder (previously split across both repos) alongside a new `HANDOFF.md` snapshot; `.gitignore` files were added/hardened in all three locations; real OTP email delivery was wired into the forgot-password flow (`AuthService.forgotPassword()` — previously the code only ever logged the code server-side, despite the SMTP infrastructure already existing for M&E notifications, per a stale "wired in Phase 7" comment that never actually got followed through when Phase 7 shipped); and end-to-end testing was consolidated into one `e2e/` suite at the repo root (Playwright — `e2e/api/` hits the backend directly, `e2e/ui/` drives the real frontend), replacing the backend's old NestJS-generated Jest e2e smoke test. That old test genuinely could not just be *moved* into `e2e/` — a real Node module-resolution wall (`@nestjs/testing` and the whole NestJS runtime only resolve from `vmmc backend/node_modules`), not merely a style preference; see backend doc §9. A Vitest layer was also added for the frontend's pure logic (`src/lib/format.ts`, `src/lib/auth.ts`) — those functions were deliberately extracted out of the screen components that used to define them inline, specifically so they'd be unit-testable without dragging React/Next.js into the test.
+A fourth pass focused on documentation, git hygiene, and testing infrastructure rather than app features: the three architecture docs moved into a shared `docs/` folder (previously split across both repos) alongside a new `HANDOFF.md` snapshot; `.gitignore` files were added/hardened in all three locations; real OTP email delivery was wired into the forgot-password flow (`AuthService.forgotPassword()` — previously the code only ever logged the code server-side, despite the SMTP infrastructure already existing for M&E notifications, per a stale "wired in Phase 7" comment that never actually got followed through when Phase 7 shipped); and end-to-end testing was consolidated into one `e2e/` suite at the repo root (Playwright — `e2e/api/` hits the backend directly, `e2e/ui/` drives the real frontend), replacing the backend's old NestJS-generated Jest e2e smoke test. That old test genuinely could not just be *moved* into `e2e/` — a real Node module-resolution wall (`@nestjs/testing` and the whole NestJS runtime only resolve from `vmmc-backend/node_modules`), not merely a style preference; see backend doc §9. A Vitest layer was also added for the frontend's pure logic (`src/lib/format.ts`, `src/lib/auth.ts`) — those functions were deliberately extracted out of the screen components that used to define them inline, specifically so they'd be unit-testable without dragging React/Next.js into the test.
 
 A fifth pass fixed a real audit-logging bug and closed out a UI exploration cleanly. The Compliance Tracker's staff-facing "My Compliance Record" card went through several iterations — a second "Next Compliance Due" card, then a merge into one wider card with due-date and Recent Activity columns — before being reverted back to its original single-card layout on request; the only lasting artifacts from that exploration are the `formatFullDate`/`formatLogTime` extractions into `src/lib/format.ts` (now shared by `Dashboard.tsx` and `Profile.tsx`) and the audit-logging fix described next, both kept because they're independently useful regardless of that card's final layout. The bug: `AuditInterceptor` labeled every `/api/me/*` request identically ("Accessed Profile"), because it derived `entity_type` from only the URL's first path segment — fixed by extracting a unit-tested `deriveEntityType()` that splits the `me` module by its actual sub-resource (`me-profile`, `me-devices`, `me-activity-logs`, ...); see backend doc §9 for the full story.
 
@@ -197,7 +197,7 @@ A thirteenth pass closed out the PII information index, the last Aug 31 feedback
 
 | You want to understand... | Go read... |
 |---|---|
-| How the M&E engine classifies events | Backend doc §5, then `vmmc backend/src/monitoring/event-classifier.service.ts` + its `.spec.ts` |
+| How the M&E engine classifies events | Backend doc §5, then `vmmc-backend/src/monitoring/event-classifier.service.ts` + its `.spec.ts` |
 | Why someone can be "on-time yet CRITICAL" | Backend doc §3 (the two-dimension status model) |
 | Why RBAC can't be bypassed from the browser | This doc §5, then backend doc §4 |
 | Why styles are inline but layout is Tailwind | Frontend doc §3 |

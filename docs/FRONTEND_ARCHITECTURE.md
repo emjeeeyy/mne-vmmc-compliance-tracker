@@ -2,7 +2,7 @@
 
 This document exists so the team can open this repo cold and actually understand *why* it's built the way it is — not just where the files are. Read it top to bottom once, then use it as a reference. Pair it with [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md) for the whole-system view and [`BACKEND_ARCHITECTURE.md`](BACKEND_ARCHITECTURE.md) for the API this UI talks to. If you're making a visual/interaction change, [`FRONTEND_STANDARDS.md`](../vmmc%20frontend/FRONTEND_STANDARDS.md) is the actual conventions rulebook — this document is about understanding the app, that one is about extending it correctly.
 
-> This document lives in `docs/`, but all repo-relative paths mentioned below (`src/...`, etc.) are relative to `vmmc frontend/`, not to this file's own location.
+> This document lives in `docs/`, but all repo-relative paths mentioned below (`src/...`, etc.) are relative to `vmmc-frontend/`, not to this file's own location.
 
 ---
 
@@ -208,7 +208,7 @@ This is the exact sequence the Compliance Tracker's department filter was conver
 
 **Before:** `const depts = ['All Departments', 'OPD Nursing', 'Radiology', 'Dietary', 'Administration']` sitting at module scope, and a hand-written name→code lookup ternary for the API filter param.
 
-1. **Confirm the backend already has what you need.** `GET /departments` already existed — no backend work required for this one. (If it hadn't, that would have been step 0: go add it in `vmmc backend` first, following its own §11.3 "how to add a new endpoint.")
+1. **Confirm the backend already has what you need.** `GET /departments` already existed — no backend work required for this one. (If it hadn't, that would have been step 0: go add it in `vmmc-backend` first, following its own §11.3 "how to add a new endpoint.")
 2. **Add state for the real data**, inside the component:
    ```tsx
    const [departments, setDepartments] = useState<Department[]>([])
@@ -238,13 +238,13 @@ The pattern generalizes: **find the hardcoded array → add fetch state → deri
 ## 10 · Running it locally
 
 ```bash
-cd "vmmc frontend"
+cd "vmmc-frontend"
 npm install
 cp .env.example .env.local   # NEXT_PUBLIC_API_URL, defaults to the local backend
 npm run dev                  # http://localhost:3000 (or $PORT)
 ```
 
-The backend must be running separately (`vmmc backend`, `npm run start:dev`) for anything beyond the login screen to work — this app has no mock-data fallback anymore.
+The backend must be running separately (`vmmc-backend`, `npm run start:dev`) for anything beyond the login screen to work — this app has no mock-data fallback anymore.
 
 **Gotchas worth knowing before you hit them:**
 - **Never run `next build` or delete `.next` while a dev server might be running against this directory** — both corrupt the live server's `.next` state (500s, "compaction failed"). Use `npx tsc --noEmit` for type-checking any time instead; it's always safe.

@@ -2,7 +2,7 @@
   "name": "capstone-vmmc",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n backend,frontend -c blue,green \"npm --prefix \\\"vmmc backend\\\" run start:dev\" \"cross-env PORT=3000 npm --prefix \\\"vmmc frontend\\\" run dev:webpack\"",
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm --prefix vmmc-backend run start:dev\" \"cross-env PORT=3000 npm --prefix vmmc-frontend run dev:webpack\"",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --project=ui",
     "test:e2e:api": "playwright test --project=api"

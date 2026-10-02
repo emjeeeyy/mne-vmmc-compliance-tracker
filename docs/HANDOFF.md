@@ -8,7 +8,7 @@ Last updated: 2026-10-01.
 
 ## 1 · What this is
 
-A capstone project: a TB DOTS (Directly Observed Treatment, Short-course) pulmonary compliance tracking system for a hospital. Two independent repos — `vmmc backend` (NestJS + Supabase) and `vmmc frontend` (Next.js) — talking over a REST API, no shared code, no monorepo tooling.
+A capstone project: a TB DOTS (Directly Observed Treatment, Short-course) pulmonary compliance tracking system for a hospital. Two independent repos — `vmmc-backend` (NestJS + Supabase) and `vmmc-frontend` (Next.js) — talking over a REST API, no shared code, no monorepo tooling.
 
 **Read [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md) first** if you want to actually understand the system. This file is only about current status and how to get moving.
 
@@ -27,7 +27,7 @@ npm run dev
 - Frontend: **http://localhost:3000**
 - Backend API: **http://localhost:8443/api** (Swagger at `/api/docs`)
 
-`.env` in `vmmc backend` needs real Supabase project values (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`) — ask whoever has them if you don't. `.env.local` in `vmmc frontend` needs nothing but the default `NEXT_PUBLIC_API_URL` (already points at localhost:8443).
+`.env` in `vmmc-backend` needs real Supabase project values (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY`) — ask whoever has them if you don't. `.env.local` in `vmmc-frontend` needs nothing but the default `NEXT_PUBLIC_API_URL` (already points at localhost:8443).
 
 Two custom commands exist for this exact workflow: **`/dev-restart`** (kill stale servers, restart both, health-check) and **`/verify`** (typecheck + unit tests + e2e, both repos).
 
@@ -36,8 +36,8 @@ Two custom commands exist for this exact workflow: **`/dev-restart`** (kill stal
 Three layers, two of them per-repo and one consolidated:
 
 ```bash
-cd "vmmc backend" && npm test    # Jest, 63 unit tests
-cd "vmmc frontend" && npm test   # Vitest, pure src/lib/* logic only (no jsdom/rendering)
+cd "vmmc-backend" && npm test    # Jest, 63 unit tests
+cd "vmmc-frontend" && npm test   # Vitest, pure src/lib/* logic only (no jsdom/rendering)
 npm run test:e2e                 # from the repo root — Playwright, e2e/api/ + e2e/ui/, both repos
 ```
 
@@ -53,7 +53,7 @@ Real, working accounts (not the fictional `@vmmc.gov.ph` seed data — these use
 | Admin | `VMMC-25-0022` | markjoseph.arambulo.cics@ust.edu.ph | `asd123` |
 | Unit Head (Dietary Unit Supervisor) | `VMMC-25-0023` | emjeeyy.arambulo@gmail.com | `asd123` |
 
-Login uses **Employee ID**, not email — the email is only the underlying Supabase Auth identity. The Unit Head account logs in via the **Staff** portal tab, not Admin — `UNIT_HEAD` and `STAFF` share the staff portal (`PORTAL_ROLES.staff`), only `ADMIN` uses the admin one; the department-scoped Staff Registry vs. the own-record view is what actually distinguishes STAFF from UNIT_HEAD once logged in. Plus ~20 fictional demo employees from the original seed (`vmmc backend/supabase/seed.sql`) sharing whatever `SEED_DEMO_PASSWORD` is set to in `.env` — those can't receive real email/SMS.
+Login uses **Employee ID**, not email — the email is only the underlying Supabase Auth identity. The Unit Head account logs in via the **Staff** portal tab, not Admin — `UNIT_HEAD` and `STAFF` share the staff portal (`PORTAL_ROLES.staff`), only `ADMIN` uses the admin one; the department-scoped Staff Registry vs. the own-record view is what actually distinguishes STAFF from UNIT_HEAD once logged in. Plus ~20 fictional demo employees from the original seed (`vmmc-backend/supabase/seed.sql`) sharing whatever `SEED_DEMO_PASSWORD` is set to in `.env` — those can't receive real email/SMS.
 
 ## 6 · What's left — next steps for whoever picks this up
 
@@ -69,7 +69,7 @@ Login uses **Employee ID**, not email — the email is only the underlying Supab
 - **STAFF's own "My Compliance Record" is now one unified dashboard panel, not a small card in an otherwise-empty grid.** Replaced on both desktop and mobile in `Compliance.tsx` (`MyComplianceDashboard` / `MyComplianceDashboardMobile`) — header with status pill, a 4-stat row, an Annual Cycle Progress bar (computed client-side from real `examDate`/`dueDate`, not a stored field), and View PDF / Upload New Result actions. Verified live against the real `VMMC-25-0021` staff account, WCAG-passed (12px text floor, 44px tap targets measured via Playwright, not eyeballed), and the PDF-modal/Upload-navigation actions both confirmed working. See `FRONTEND_ARCHITECTURE.md` §7 for a real data quirk this surfaced (a record can be "Compliant This Cycle" while its next requirement shows as overdue — that's the monitoring engine not having reclassified it yet, not a UI bug). UNIT_HEAD/ADMIN's staff-directory card grid is untouched.
 - **Document rejection now actually notifies the employee — it used to be completely silent.** Found while auditing every real email `EmailChannel` sends: `DocumentsService.review()`'s reject branch updated the DB and returned, with no event, no in-app notification, nothing — the employee only found out by re-checking their own upload history. Fixed with a new `DOCUMENT_REJECTED` event (`WARNING`-tier, message embeds the real rejection reason), following the same `emitOther()` pattern PEP/Immunization events already use. Verified live: rejected a real pending document via the actual API, confirmed the event row and all three notification rows (`IN_APP` sent, `SMS` logged via dev fallback, `EMAIL` genuinely sent via Gmail SMTP) — then restored the document to `PENDING` and cleaned up the test notification rows (the `events` row itself is permanent — that table is append-only by DB constraint, by design). See `BACKEND_ARCHITECTURE.md` §8.
 - **`THREE_MONTH_HR_NOTICE` bumped from `WARNING` to `EXCEPTION`.** It was sharing the same low-priority visual/dispatch tier as "your window just opened" despite being the most severe state in the timeline dimension (90+ days non-compliant) — bumping it means it now also opens an escalation like `SLA_BREACH`/`CLINICAL_ALERT` do, so admins actually see it in the escalations queue instead of it only reaching the employee's own inbox. Its copy was also rewritten in second person — the old text ("HR notice: this employee has remained non-compliant...") was addressed to HR but the system only ever emails the employee, so they'd have received an email talking about them in third person. See `BACKEND_ARCHITECTURE.md` §5.4.
-- **Every real email this system sends is now a designed HTML email, not plain text.** `vmmc backend/src/notifications/email-templates/` (new folder — deliberately backend-only, since email is sent server-side via `nodemailer` and the two repos share no source code). `EmailChannel.send()` grew an optional `html` 4th param; `AuthService.forgotPassword()` and `NotificationDispatcherService.dispatchOne()` both now build `{ subject, html, text }` via `buildOtpEmail()`/`buildEventEmail()` instead of a hardcoded string. Started as 12 standalone mockups (`vmmc frontend/_scratch/email-templates.html` — since deleted now that the design is implemented for real; see `PROGRESS_REPORT_2.md` Part N for what they looked like) — 9 of those 12 are wired to real sends (OTP + the 8 M&E subtypes that actually email + document rejection); the other 2 (`WINDOW_OPENED`/`CLEARANCE_RECORDED`) stay in-app-only by design, so their mockups were never converted to code. Fixed a real pre-existing gap along the way: every M&E email used to share one identical subject line regardless of what happened — now each event subtype gets its own. See `BACKEND_ARCHITECTURE.md` §6 for the full breakdown. Verified live against the real running backend (not just typechecked): a real OTP email request and two real document-rejection emails, both confirmed via the `notifications` table with genuine Gmail SMTP message IDs, not just a 200 response.
+- **Every real email this system sends is now a designed HTML email, not plain text.** `vmmc-backend/src/notifications/email-templates/` (new folder — deliberately backend-only, since email is sent server-side via `nodemailer` and the two repos share no source code). `EmailChannel.send()` grew an optional `html` 4th param; `AuthService.forgotPassword()` and `NotificationDispatcherService.dispatchOne()` both now build `{ subject, html, text }` via `buildOtpEmail()`/`buildEventEmail()` instead of a hardcoded string. Started as 12 standalone mockups (`vmmc-frontend/_scratch/email-templates.html` — since deleted now that the design is implemented for real; see `PROGRESS_REPORT_2.md` Part N for what they looked like) — 9 of those 12 are wired to real sends (OTP + the 8 M&E subtypes that actually email + document rejection); the other 2 (`WINDOW_OPENED`/`CLEARANCE_RECORDED`) stay in-app-only by design, so their mockups were never converted to code. Fixed a real pre-existing gap along the way: every M&E email used to share one identical subject line regardless of what happened — now each event subtype gets its own. See `BACKEND_ARCHITECTURE.md` §6 for the full breakdown. Verified live against the real running backend (not just typechecked): a real OTP email request and two real document-rejection emails, both confirmed via the `notifications` table with genuine Gmail SMTP message IDs, not just a 200 response.
 
 **Not built yet:**
 - **No CI/CD.** The `e2e/` suite and both repos' unit tests exist and pass, but nothing runs them automatically on push/PR — there's no GitHub Actions workflow (or equivalent) yet. Worth setting up once the repo is actually pushed to GitHub (see the root `.gitignore`/repo-hygiene work — §7).
@@ -85,11 +85,11 @@ Right here in `docs/`, alongside this file (this was previously split across bot
 - [`BACKEND_ARCHITECTURE.md`](BACKEND_ARCHITECTURE.md) — NestJS/Supabase API, the M&E engine, RBAC
 - [`FRONTEND_ARCHITECTURE.md`](FRONTEND_ARCHITECTURE.md) — Next.js UI, styling convention, component patterns
 
-`vmmc frontend/AGENTS.md`/`CLAUDE.md` (plus `FRONTEND_STANDARDS.md`, its visual/interaction conventions rulebook) stayed where they are — that's "how to work in this specific repo" reference, not a system-level doc. `vmmc backend` has no separate `AGENTS.md`; its equivalent guidance lives directly in `BACKEND_ARCHITECTURE.md`. The repo **root** now has its own [`AGENTS.md`](../AGENTS.md)/`CLAUDE.md` too — repo-wide conventions that apply regardless of which half you're working in, including §9 below.
+`vmmc-frontend/AGENTS.md`/`CLAUDE.md` (plus `FRONTEND_STANDARDS.md`, its visual/interaction conventions rulebook) stayed where they are — that's "how to work in this specific repo" reference, not a system-level doc. `vmmc-backend` has no separate `AGENTS.md`; its equivalent guidance lives directly in `BACKEND_ARCHITECTURE.md`. The repo **root** now has its own [`AGENTS.md`](../AGENTS.md)/`CLAUDE.md` too — repo-wide conventions that apply regardless of which half you're working in, including §9 below.
 
 ## 8 · If you're an AI assistant picking this up
 
-Read the root [`AGENTS.md`](../AGENTS.md), [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md) §7 (phase history), and this file before doing anything. `vmmc frontend` additionally has its own `AGENTS.md`/`CLAUDE.md` with repo-specific conventions — `FRONTEND_STANDARDS.md` in particular has hard-won gotchas (styling convention, responsive breakpoint traps, Playwright locator quirks) that will waste real time to rediscover if skipped.
+Read the root [`AGENTS.md`](../AGENTS.md), [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md) §7 (phase history), and this file before doing anything. `vmmc-frontend` additionally has its own `AGENTS.md`/`CLAUDE.md` with repo-specific conventions — `FRONTEND_STANDARDS.md` in particular has hard-won gotchas (styling convention, responsive breakpoint traps, Playwright locator quirks) that will waste real time to rediscover if skipped.
 
 ## 9 · Keeping this documentation current
 
