@@ -13,11 +13,14 @@ import { AuditService } from '../audit/audit.service';
 import { validateEmployeeId } from '../common/assert-access';
 import { describeUserAgent } from '../common/describe-user-agent';
 import { EmailChannel } from '../notifications/channels/email.channel';
+import { buildLoginOtpEmail } from '../notifications/email-templates/login-otp.template';
 import { buildOtpEmail } from '../notifications/email-templates/otp.template';
 import { SupabaseService } from '../supabase/supabase.service';
 import { Role } from './types/role';
 
 const OTP_TTL_MINUTES = 10;
+const LOGIN_OTP_TTL_MINUTES = 10;
+const LOGIN_OTP_MAX_ATTEMPTS = 5;
 const RESET_TOKEN_TTL = '5m';
 const RESET_TOKEN_PURPOSE = 'password_reset';
 const DEFAULT_PASSWORD = 'password123';
@@ -33,6 +36,15 @@ interface EmployeeRow {
   role: Role;
   department_id: string;
   must_change_password?: boolean;
+  two_factor_enabled?: boolean;
+}
+
+/** The two values out of a Supabase session that finishLogin() actually needs to hand back —
+ * shaped so the same method works whether the session was just minted by signInWithPassword()
+ * (plain login) or read back out of a login_otps row (post-2FA). */
+interface SessionLike {
+  access_token: string;
+  expires_at?: number;
 }
 
 const PORTAL_ROLES: Record<'staff' | 'admin', Role[]> = {
@@ -78,6 +90,19 @@ export class AuthService {
       throw new ForbiddenException('This account is not authorized for the selected portal.');
     }
 
+    if (employee.two_factor_enabled) {
+      await this.issueLoginOtp(employee, data.session);
+      return { mfaRequired: true as const, employeeId: employee.employee_id, portal };
+    }
+
+    return this.finishLogin(employee, data.session, context);
+  }
+
+  /** The last step both the plain-password path and the post-2FA path converge on — audits the
+   * LOGIN, records the device, and shapes the real session response. Deliberately not reached at
+   * all until 2FA (if enabled) has actually been satisfied — logging LOGIN/recording a device for
+   * a password-only attempt would be premature for an account that still needs a second factor. */
+  private async finishLogin(employee: EmployeeRow, session: SessionLike, context: { ipAddress: string | null; userAgent: string | null }) {
     await this.auditService.log({
       actorId: employee.id,
       action: 'LOGIN',
@@ -89,11 +114,98 @@ export class AuthService {
     await this.recordDeviceLogin(employee.id, context.userAgent);
 
     return {
-      accessToken: data.session.access_token,
-      expiresAt: data.session.expires_at,
+      accessToken: session.access_token,
+      expiresAt: session.expires_at,
       user: this.toPublicUser(employee),
       mustChangePassword: Boolean(employee.must_change_password),
     };
+  }
+
+  /** Stashes the session signInWithPassword() already minted — there's no password to re-check in
+   * verifyLoginOtp(), only employeeId/portal/otp, so this is the only place a session can come
+   * from once the OTP step starts. See the migration's comment on login_otps for the full reasoning. */
+  private async issueLoginOtp(employee: EmployeeRow, session: SessionLike) {
+    // session.expires_at is typed optional by the Supabase SDK, but a session that just came
+    // straight out of a successful signInWithPassword() always has one in practice — guarded
+    // explicitly so a missing value fails with a clear message here, not an opaque NOT NULL
+    // constraint violation from the insert below.
+    if (!session.expires_at) throw new BadRequestException('Unable to start the login verification step.');
+
+    const otp = randomInt(0, 1_000_000).toString().padStart(6, '0');
+    const otpHash = await bcrypt.hash(otp, 10);
+    const expiresAt = new Date(Date.now() + LOGIN_OTP_TTL_MINUTES * 60_000).toISOString();
+
+    const { error } = await this.supabaseService.getClient().from('login_otps').insert({
+      employee_id: employee.id,
+      otp_hash: otpHash,
+      expires_at: expiresAt,
+      access_token: session.access_token,
+      token_expires_at: session.expires_at,
+    });
+    if (error) throw new BadRequestException(error.message);
+
+    const otpEmail = buildLoginOtpEmail({
+      name: employee.full_name,
+      code: otp,
+      expiresMinutes: LOGIN_OTP_TTL_MINUTES,
+      requestedAt: new Date(),
+    });
+    await this.emailChannel.send(employee.email, otpEmail.subject, otpEmail.text, otpEmail.html);
+  }
+
+  async verifyLoginOtp(
+    employeeId: string,
+    portal: 'staff' | 'admin',
+    otp: string,
+    context: { ipAddress: string | null; userAgent: string | null },
+  ) {
+    const employee = await this.findEmployeeByEmployeeId(employeeId);
+    if (!employee) throw new UnauthorizedException('Invalid Employee ID or code.');
+
+    const { data, error } = await this.supabaseService
+      .getClient()
+      .from('login_otps')
+      .select('id, otp_hash, expires_at, consumed_at, attempt_count, access_token, token_expires_at')
+      .eq('employee_id', employee.id)
+      .is('consumed_at', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) throw new BadRequestException('Invalid or expired code.');
+
+    if (new Date(data.expires_at).getTime() < Date.now()) {
+      throw new BadRequestException('Invalid or expired code.');
+    }
+
+    // Checked before the hash compare, not after — a locked-out attempt shouldn't still get a
+    // real pass/fail verdict on whatever code they just typed.
+    if (data.attempt_count >= LOGIN_OTP_MAX_ATTEMPTS) {
+      await this.logLoginFailure(employee.id, context, { employeeId, reason: 'login_otp_locked' });
+      throw new BadRequestException('Too many incorrect attempts. Please log in again to request a new code.');
+    }
+
+    const matches = await bcrypt.compare(otp, data.otp_hash);
+    if (!matches) {
+      await this.supabaseService
+        .getClient()
+        .from('login_otps')
+        .update({ attempt_count: data.attempt_count + 1 })
+        .eq('id', data.id);
+      await this.logLoginFailure(employee.id, context, { employeeId, reason: 'invalid_login_otp' });
+      throw new BadRequestException('Invalid or expired code.');
+    }
+
+    if (!PORTAL_ROLES[portal].includes(employee.role)) {
+      throw new ForbiddenException('This account is not authorized for the selected portal.');
+    }
+
+    await this.supabaseService
+      .getClient()
+      .from('login_otps')
+      .update({ consumed_at: new Date().toISOString() })
+      .eq('id', data.id);
+
+    return this.finishLogin(employee, { access_token: data.access_token, expires_at: data.token_expires_at }, context);
   }
 
   async signup(employeeId: string, employmentType?: 'PERMANENT' | 'COS') {
@@ -304,7 +416,7 @@ export class AuthService {
     const { data } = await this.supabaseService
       .getClient()
       .from('employees')
-      .select('id, auth_user_id, employee_id, full_name, job_title, email, phone, role, department_id, must_change_password')
+      .select('id, auth_user_id, employee_id, full_name, job_title, email, phone, role, department_id, must_change_password, two_factor_enabled')
       .eq('employee_id', employeeId)
       .maybeSingle();
     return data as EmployeeRow | null;

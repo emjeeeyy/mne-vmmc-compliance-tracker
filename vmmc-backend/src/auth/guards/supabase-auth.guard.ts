@@ -24,7 +24,7 @@ export class SupabaseAuthGuard implements CanActivate {
     const { data, error: employeeError } = await this.supabaseService
       .getClient()
       .from('employees')
-      .select('id, auth_user_id, employee_id, full_name, job_title, email, role, department_id, birth_date')
+      .select('id, auth_user_id, employee_id, full_name, job_title, email, role, department_id, birth_date, two_factor_enabled')
       .eq('auth_user_id', user.id)
       .single();
 
@@ -40,6 +40,7 @@ export class SupabaseAuthGuard implements CanActivate {
       role: data.role as Role,
       departmentId: data.department_id,
       birthDate: data.birth_date,
+      twoFactorEnabled: Boolean(data.two_factor_enabled),
     } satisfies EmployeeContext;
 
     return true;

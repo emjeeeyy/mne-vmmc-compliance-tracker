@@ -36,4 +36,14 @@ export class SecurityService {
     if (error) throw new BadRequestException(error.message);
     return { message: 'Password updated.' };
   }
+
+  async updateTwoFactor(currentUser: EmployeeContext, enabled: boolean) {
+    const { error } = await this.supabaseService
+      .getClient()
+      .from('employees')
+      .update({ two_factor_enabled: enabled })
+      .eq('id', currentUser.id);
+    if (error) throw new BadRequestException(error.message);
+    return { twoFactorEnabled: enabled };
+  }
 }

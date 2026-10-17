@@ -25,6 +25,30 @@
         ]
       }
     },
+    "/api/auth/verify-login-otp": {
+      "post": {
+        "operationId": "AuthController_verifyLoginOtp",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyLoginOtpDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/signup": {
       "post": {
         "operationId": "AuthController_signup",
@@ -416,6 +440,35 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/UpdatePasswordDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "me"
+        ]
+      }
+    },
+    "/api/me/security/two-factor": {
+      "patch": {
+        "operationId": "MeController_updateTwoFactor",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTwoFactorDto"
               }
             }
           }
@@ -1509,6 +1562,32 @@
           "portal"
         ]
       },
+      "VerifyLoginOtpDto": {
+        "type": "object",
+        "properties": {
+          "employeeId": {
+            "type": "string",
+            "example": "VMMC-23-0002"
+          },
+          "portal": {
+            "type": "string",
+            "enum": [
+              "staff",
+              "admin"
+            ]
+          },
+          "otp": {
+            "type": "string",
+            "description": "6-digit code.",
+            "example": "123456"
+          }
+        },
+        "required": [
+          "employeeId",
+          "portal",
+          "otp"
+        ]
+      },
       "SignupDto": {
         "type": "object",
         "properties": {
@@ -1653,6 +1732,17 @@
         "required": [
           "currentPassword",
           "newPassword"
+        ]
+      },
+      "UpdateTwoFactorDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
         ]
       },
       "UpdatePrivacySettingsDto": {

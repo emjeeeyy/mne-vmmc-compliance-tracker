@@ -9,6 +9,12 @@ import { fadeRise } from '@/lib/motion'
 import { login, type AuthSession, setPasswordChangeRequired } from '@/lib/auth'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
 
+interface MfaRequiredResponse {
+  mfaRequired: true
+  employeeId: string
+  portal: 'staff' | 'admin'
+}
+
 export default function Login() {
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'staff' | 'admin'>('staff')
@@ -19,8 +25,30 @@ export default function Login() {
   const [attempted, setAttempted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [apiError, setApiError] = useState('')
+  const [mfaStep, setMfaStep] = useState(false)
+  const [otp, setOtp] = useState('')
 
   const missingFields = !employeeId.trim() || !password.trim()
+
+  const finishLogin = (session: AuthSession) => {
+    login(session)
+    if (session.mustChangePassword) {
+      setPasswordChangeRequired(true)
+      router.push('/first-login')
+      return
+    }
+    router.push('/dashboard')
+  }
+
+  const handleApiError = (err: unknown, fallback: string) => {
+    if (err instanceof ApiError) {
+      setApiError(err.message || fallback)
+    } else if (err instanceof ApiConnectionError) {
+      setApiError('Connection is slow or unavailable. Please try again.')
+    } else {
+      setApiError('Something went wrong. Please try again.')
+    }
+  }
 
   const handleLogin = async () => {
     setAttempted(true)
@@ -29,29 +57,46 @@ export default function Login() {
 
     setSubmitting(true)
     try {
-      const session = await api.post<AuthSession>('/auth/login', {
+      const result = await api.post<AuthSession | MfaRequiredResponse>('/auth/login', {
         employeeId: employeeId.trim(),
         password,
         portal: activeTab,
       })
-      login(session)
-      if (session.mustChangePassword) {
-        setPasswordChangeRequired(true)
-        router.push('/first-login')
+      if ('mfaRequired' in result) {
+        setMfaStep(true)
         return
       }
-      router.push('/dashboard')
+      finishLogin(result)
     } catch (err) {
-      if (err instanceof ApiError) {
-        setApiError(err.message || 'Invalid Employee ID or password.')
-      } else if (err instanceof ApiConnectionError) {
-        setApiError('Connection is slow or unavailable. Please try again.')
-      } else {
-        setApiError('Something went wrong. Please try again.')
-      }
+      handleApiError(err, 'Invalid Employee ID or password.')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleVerifyOtp = async () => {
+    setApiError('')
+    if (!otp.trim() || submitting) return
+
+    setSubmitting(true)
+    try {
+      const session = await api.post<AuthSession>('/auth/verify-login-otp', {
+        employeeId: employeeId.trim(),
+        portal: activeTab,
+        otp: otp.trim(),
+      })
+      finishLogin(session)
+    } catch (err) {
+      handleApiError(err, 'Invalid or expired code.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const backToLogin = () => {
+    setMfaStep(false)
+    setOtp('')
+    setApiError('')
   }
 
   const tabRow = (
@@ -157,6 +202,47 @@ export default function Login() {
     </>
   )
 
+  const otpStep = (
+    <>
+      <div style={{ textAlign: 'center', marginBottom: 24 }}>
+        <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', marginBottom: 8 }}>Enter Verification Code</div>
+        <p style={{ fontSize: 12, color: '#718096', lineHeight: 1.6, margin: 0 }}>We sent a 6-digit code to the email on your account. It expires in 10 minutes.</p>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <label htmlFor="login-otp" style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Verification Code</label>
+        <input
+          id="login-otp"
+          value={otp}
+          onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          placeholder="123456"
+          inputMode="numeric"
+          autoFocus
+          style={{ width: '100%', padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 20, fontWeight: 700, letterSpacing: '0.4em', textAlign: 'center', fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
+          onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
+          onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
+        />
+      </div>
+
+      {loginError}
+
+      <motion.button
+        onClick={handleVerifyOtp}
+        whileHover={submitting ? undefined : { scale: 1.02, filter: 'brightness(1.05)' }}
+        whileTap={submitting ? undefined : { scale: 0.98 }}
+        transition={{ duration: 0.15 }}
+        disabled={submitting || otp.length !== 6}
+        style={{ width: '100%', padding: '14px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, cursor: submitting ? 'default' : 'pointer', marginBottom: 16, boxShadow: '0 8px 24px rgba(0,0,0,0.1)', opacity: submitting || otp.length !== 6 ? 0.6 : 1 }}
+      >
+        {submitting ? 'Verifying…' : 'Verify & Log In'}
+      </motion.button>
+
+      <button onClick={backToLogin} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, textDecoration: 'underline', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+        ← Back to login
+      </button>
+    </>
+  )
+
   return (
     <>
       {/* Mobile-native login (phones, < sm) — distinct layout, not a reflow of the desktop card */}
@@ -186,14 +272,18 @@ export default function Login() {
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1], delay: 0.15 }} style={{ marginTop: 32 }}>
-            {tabRow}
-            {employeeIdField}
-            {passwordField}
-            {rememberRow}
-            {signupPrompt}
-            {loginError}
-            {loginButton}
-            {finePrint}
+            {mfaStep ? otpStep : (
+              <>
+                {tabRow}
+                {employeeIdField}
+                {passwordField}
+                {rememberRow}
+                {signupPrompt}
+                {loginError}
+                {loginButton}
+                {finePrint}
+              </>
+            )}
           </motion.div>
         </div>
       </div>
@@ -272,14 +362,18 @@ export default function Login() {
                 Input your secure credentials below to enter the active pulmonary compliance registry.
               </p>
 
-              {tabRow}
-              {employeeIdField}
-              {passwordField}
-              {rememberRow}
-              {signupPrompt}
-              {loginError}
-              {loginButton}
-              {finePrint}
+              {mfaStep ? otpStep : (
+                <>
+                  {tabRow}
+                  {employeeIdField}
+                  {passwordField}
+                  {rememberRow}
+                  {signupPrompt}
+                  {loginError}
+                  {loginButton}
+                  {finePrint}
+                </>
+              )}
             </motion.div>
           </div>
         </div>

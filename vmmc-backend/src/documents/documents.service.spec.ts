@@ -17,6 +17,7 @@ const EMPLOYEE: EmployeeContext = {
   role: 'STAFF',
   departmentId: 'dept-1',
   birthDate: '1990-01-01',
+  twoFactorEnabled: false,
 };
 
 const PDF_BUFFER = Buffer.concat([Buffer.from('%PDF-1.4\n'), Buffer.alloc(20)]);

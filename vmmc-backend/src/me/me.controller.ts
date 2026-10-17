@@ -16,6 +16,7 @@ import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
 import { UpdatePinDto } from './dto/update-pin.dto';
 import { UpdatePrivacySettingsDto } from './dto/update-privacy-settings.dto';
+import { UpdateTwoFactorDto } from './dto/update-two-factor.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { DevicesService } from './devices.service';
 import { ProfileService } from './profile.service';
@@ -89,6 +90,11 @@ export class MeController {
   @Patch('security/password')
   updatePassword(@CurrentUser() employee: EmployeeContext, @Body() dto: UpdatePasswordDto) {
     return this.securityService.updatePassword(employee, dto.currentPassword, dto.newPassword);
+  }
+
+  @Patch('security/two-factor')
+  updateTwoFactor(@CurrentUser() employee: EmployeeContext, @Body() dto: UpdateTwoFactorDto) {
+    return this.securityService.updateTwoFactor(employee, dto.enabled);
   }
 
   @Get('privacy-settings')

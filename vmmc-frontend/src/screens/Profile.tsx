@@ -198,7 +198,7 @@ export default function Profile() {
   }, [])
 
   useEffect(() => {
-    api.get<{ fullName: string; email: string; phone: string | null; jobTitle: string | null; employeeId: string; birthDate: string }>('/me/profile')
+    api.get<{ fullName: string; email: string; phone: string | null; jobTitle: string | null; employeeId: string; birthDate: string; twoFactorEnabled: boolean }>('/me/profile')
       .then((data) => {
         setDisplayName(data.fullName)
         setEmail(data.email)
@@ -206,6 +206,7 @@ export default function Profile() {
         setJobTitle(data.jobTitle ?? '')
         setEmployeeId(data.employeeId)
         setBirthDate(data.birthDate)
+        setTwoFactorEnabled(data.twoFactorEnabled)
       })
       .catch(() => {})
     api.get<ActivityLogEntry[]>('/me/activity-logs').then(setActivityLogs).catch(() => {})
@@ -266,7 +267,17 @@ export default function Profile() {
   const [pwAttempted, setPwAttempted] = useState(false)
   const [pwSaved, setPwSaved] = useState(false)
   const [passwordChangedLabel, setPasswordChangedLabel] = useState('Manage your account password')
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(true)
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
+
+  const toggleTwoFactor = async () => {
+    const next = !twoFactorEnabled
+    setTwoFactorEnabled(next) // optimistic — reverted below if the save fails
+    try {
+      await api.patch('/me/security/two-factor', { enabled: next })
+    } catch {
+      setTwoFactorEnabled(!next)
+    }
+  }
 
   const adminStats = [
     { label: 'Reviews', value: String(performanceStats.reviews), color: '#1f3151' },
@@ -636,7 +647,7 @@ export default function Profile() {
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', marginBottom: 4 }}>Enable Two-Factor Authentication</div>
                     <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.5 }}>Require a one-time verification code in addition to your password when signing in.</div>
                   </div>
-                  <ToggleSwitch checked={twoFactorEnabled} onChange={() => setTwoFactorEnabled(v => !v)} />
+                  <ToggleSwitch checked={twoFactorEnabled} onChange={toggleTwoFactor} />
                 </div>
                 {twoFactorEnabled && (
                   <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', gap: 10, background: '#f0fff4', border: '1px solid #c6f6d5', borderRadius: 14, padding: 14, marginTop: 16 }}>
@@ -986,7 +997,7 @@ export default function Profile() {
                           <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>Enable Two-Factor Authentication</div>
                           <div style={{ fontSize: 13, color: '#a0aec0', lineHeight: 1.6 }}>Require a one-time verification code in addition to your password when signing in.</div>
                         </div>
-                        <ToggleSwitch checked={twoFactorEnabled} onChange={() => setTwoFactorEnabled(v => !v)} />
+                        <ToggleSwitch checked={twoFactorEnabled} onChange={toggleTwoFactor} />
                       </div>
                       {twoFactorEnabled && (
                         <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'flex', gap: 12, background: '#f0fff4', border: '1px solid #c6f6d5', borderRadius: 14, padding: 16, marginTop: 24 }}>

@@ -7,6 +7,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SignupDto } from './dto/signup.dto';
+import { VerifyLoginOtpDto } from './dto/verify-login-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { SupabaseAuthGuard } from './guards/supabase-auth.guard';
 
@@ -19,6 +20,15 @@ export class AuthController {
   @HttpCode(200)
   login(@Body() dto: LoginDto, @Ip() ip: string, @Req() req: Request) {
     return this.authService.login(dto.employeeId, dto.password, dto.portal, {
+      ipAddress: ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
+  }
+
+  @Post('verify-login-otp')
+  @HttpCode(200)
+  verifyLoginOtp(@Body() dto: VerifyLoginOtpDto, @Ip() ip: string, @Req() req: Request) {
+    return this.authService.verifyLoginOtp(dto.employeeId, dto.portal, dto.otp, {
       ipAddress: ip ?? null,
       userAgent: req.headers['user-agent'] ?? null,
     });

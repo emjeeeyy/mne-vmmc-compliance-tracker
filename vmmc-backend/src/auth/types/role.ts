@@ -10,4 +10,5 @@ export interface EmployeeContext {
   role: Role;
   departmentId: string;
   birthDate: string;
+  twoFactorEnabled: boolean;
 }
