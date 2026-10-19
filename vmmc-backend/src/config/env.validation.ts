@@ -45,20 +45,11 @@ class EnvironmentVariables {
 
   @IsString()
   @IsOptional()
-  SMTP_HOST?: string;
-
-  @Type(() => Number)
-  @IsInt()
-  @IsOptional()
-  SMTP_PORT?: number;
+  BREVO_API_KEY?: string;
 
   @IsString()
   @IsOptional()
-  SMTP_USER?: string;
-
-  @IsString()
-  @IsOptional()
-  SMTP_PASSWORD?: string;
+  EMAIL_FROM?: string;
 
   @IsString()
   @IsOptional()

@@ -1,6 +1,6 @@
 # Progress Report 3
 
-**Date:** 2026-10-02 (session continues through 2026-10-06, work below covers through today)
+**Date:** 2026-10-02 (session continues through 2026-10-19, work below covers through today)
 **Branch:** `main` (unlike Progress Report 2, this work is being committed and pushed as it lands — see Part C for why that changed)
 
 This file picks up exactly where `docs/PROGRESS_REPORT_2.md` was told to stop — the user ended that file's logging practice ("now stop updating the progress report 2.md and adding screenshots to progress report 2 assets") partway through the session, then asked for a fresh report covering everything from that point forward. Same shape as its predecessor: a running log, not a snapshot, appended to after each phase rather than rewritten — but no screenshots/assets folder this time, since that specific practice is what was asked to stop. Follows the same Attempts / Failures / Progress structure throughout.
@@ -156,6 +156,32 @@ Docs updated: `HANDOFF.md`'s 2FA entry rewritten for the opt-out default and the
 
 ---
 
+## Part G — Pushing 2FA broke production login outright, and the real cause took three fixes to fully resolve
+
+The user said "Push the recent code now" — Parts E and F (2FA, default-on) went to `main` as `497dff6`. Railway auto-deployed it. Shortly after, the user reported: *"Connection is slow or unavailable. Please try again. This appears in the deployment can you check what's wrong."*
+
+### Attempts
+
+Checked the deployed backend directly rather than guessing from the symptom. `/api/health` responded fine (`200`), ruling out a repeat of the earlier CORS-trailing-newline total-outage bug. A real login attempt against the deployed API, though, timed out outright — no response at all within 20s. A wrong-password attempt on the same account returned a clean `401` in 1.3s, which narrowed the hang to specifically *after* password verification — i.e., somewhere inside the new 2FA code path, not the password check itself (and incidentally confirmed the two 2FA migrations *were* applied to production, since that query path clearly succeeded).
+
+### Failures
+
+**First real bug: the login request was blocking on the OTP email send, and Railway's connection to Gmail SMTP wasn't completing at all.** `issueLoginOtp()` (and, found by testing it directly, the pre-existing `forgotPassword()` — unrelated to 2FA, confirmed to hang identically) both `await`ed `EmailChannel.send()` before returning a response, and nodemailer had no configured timeout, so a stuck SMTP connection could block the HTTP response indefinitely. Not a regression introduced by the 2FA work itself — forgot-password had this exact same latent bug already; 2FA defaulting to on for every account just turned a rarely-hit code path into the one every single login now depends on. Fixed by (a) adding explicit 5–10s timeouts to the nodemailer transport, bounding every email attempt app-wide, and (b) no longer awaiting the email send in either call site — neither used its result, and a login response should never be hostage to a third-party mail server. Verified live: the same login request that previously timed out at 20s+ now returned `{"mfaRequired":true,...}` in under 2 seconds. Pushed as `fc9b024`.
+
+**Second real bug, found immediately after confirming the first fix worked: the OTP email still never arrived.** Login no longer hung, but the user reported no email showed up at all. Asked for Railway's live deploy logs around the attempt (not the sanitized client error) and got a precise answer: `Error: connect ENETUNREACH 2a00:1450:4009:c0f::6c:587`. Root cause: Railway's container reports an IPv6-capable network interface that isn't actually routable to the internet; nodemailer resolves both the A and AAAA records for `smtp.gmail.com` and — per its own source (`lib/shared/index.js`, `formatDNSValue()`) — picks a **random** address from the combined list rather than deterministically preferring IPv4, so roughly every other attempt picked the unreachable IPv6 address and failed outright. Fixed by resolving the SMTP host to a literal IPv4 address ourselves at startup (`dns/promises`' `resolve4()`) and connecting directly to it — bypassing nodemailer's own dual-stack selection — with `tls.servername` set to the real hostname so certificate validation still checks out. Pushed as `98cb866`.
+
+**Third issue, found immediately after the second fix: forcing IPv4 didn't fix delivery either — the error just changed.** The next live deploy-log check showed `Error: Connection timeout` instead of `ENETUNREACH` — meaning the IPv4 connection attempt itself wasn't completing, not a DNS/address-family quirk. Taken together with the first error, this meant Railway's outbound network genuinely cannot reliably reach Gmail's SMTP port at all, which no further low-level nodemailer tuning was going to fix. Raw SMTP from a cloud container is a known-bad pattern for exactly this reason (ports frequently blocked or filtered, independent of the specific platform).
+
+### Progress
+
+Rather than keep iterating on sockets, asked the user how they wanted to handle it (quick stabilization by temporarily defaulting 2FA off again, vs. switching to a real HTTP-based email provider now) — chose to fix it properly. Compared providers against this project's two real constraints (no owned domain, needs to stay free for a capstone's volume): Brevo's 300/day free-forever tier with no-domain single-sender verification was the clear fit over Resend (domain required for real recipients), SendGrid (free tier has trended toward time-limited trials), Mailgun/Postmark (no perpetual free tier), and SES (sandbox approval friction). User confirmed Brevo.
+
+Replaced `EmailChannel` entirely: `nodemailer`'s raw SMTP socket swapped for a plain `fetch()` POST to Brevo's HTTP API (`https://api.brevo.com/v3/smtp/email`) — the exact same shape `SmsChannel` already used for Semaphore, so the whole notification layer is now consistently HTTP-based instead of one channel owning a raw socket. `nodemailer`/`@types/nodemailer` removed as dependencies (confirmed nothing else in the backend imported them first). `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASSWORD` removed from env validation and `.env.example`, replaced with `BREVO_API_KEY`/`EMAIL_FROM`. Verified clean: `tsc --noEmit` passes, all 75 backend unit tests still pass (none exercised `EmailChannel` directly, so nothing needed updating there). Docs updated: `BACKEND_ARCHITECTURE.md` §6 gets the full root-cause writeup (the only place an old "Gmail SMTP" factual claim needed correcting outside frozen historical narrative in `SYSTEM_ARCHITECTURE.md`, which stays as-is since it correctly describes what was true in past passes), `HANDOFF.md` gets a new deployment-bug bullet alongside the Vercel/Railway ones from Part D.
+
+**Still pending as of this entry:** the user needs to actually sign up for Brevo, verify a single sender email, and add `BREVO_API_KEY`/`EMAIL_FROM` to Railway's environment variables before this can be verified live end to end (the code is correct and tested, but there's no real API key to test against yet in this environment).
+
+---
+
 ## Current status
 
-Everything through Part D is live on `main` and deployed (Vercel + Railway, linked and confirmed working via a real cross-origin login). Parts E and F (real 2FA, now correctly defaulting on) are complete and fully verified — including, as of Part F, through the real browser UI, not just the API — but still sitting locally, one confirmation away from being pushed. No outstanding failures or known-broken state as of this entry.
+Everything through Part D is live on `main` and deployed (Vercel + Railway, linked and confirmed working via a real cross-origin login). Parts E and F (real 2FA, defaulting on) are live on `main` as of `497dff6`. Part G (the production login-hang incident and its three fixes — bounded/non-blocking email sends, then the Brevo provider swap) is code-complete and pushed as `fc9b024`/`98cb866`/pending, but **not yet fully verified live** — waiting on the user to create a Brevo account and add real credentials to Railway before the email-delivery path can be confirmed working end to end in production.
