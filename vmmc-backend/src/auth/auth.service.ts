@@ -150,7 +150,10 @@ export class AuthService {
       expiresMinutes: LOGIN_OTP_TTL_MINUTES,
       requestedAt: new Date(),
     });
-    await this.emailChannel.send(employee.email, otpEmail.subject, otpEmail.text, otpEmail.html);
+    // Deliberately not awaited: the code is already stored and checkable the moment this
+    // returns, and send() can never reject (it catches its own retries) — but a slow/stuck
+    // SMTP connection must never hold the login request itself hostage. See email.channel.ts.
+    void this.emailChannel.send(employee.email, otpEmail.subject, otpEmail.text, otpEmail.html);
   }
 
   async verifyLoginOtp(
@@ -286,7 +289,9 @@ export class AuthService {
       expiresMinutes: OTP_TTL_MINUTES,
       requestedAt: new Date(),
     });
-    await this.emailChannel.send(employee.email, otpEmail.subject, otpEmail.text, otpEmail.html);
+    // Same reasoning as issueLoginOtp(): don't let a slow/stuck SMTP connection hold this
+    // request hostage — the response below doesn't depend on the email having actually sent yet.
+    void this.emailChannel.send(employee.email, otpEmail.subject, otpEmail.text, otpEmail.html);
 
     return { message: 'If that account exists, a code has been sent.' };
   }

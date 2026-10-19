@@ -34,6 +34,14 @@ export class EmailChannel implements OnModuleInit {
       port: this.configService.get<number>('SMTP_PORT') ?? 587,
       secure: false,
       auth: { user, pass: password },
+      // Nodemailer's own defaults (minutes-long) turn a blocked/throttled outbound SMTP
+      // connection into a near-infinite hang — observed for real on Railway, where Gmail
+      // silently drops the connection attempt instead of refusing it outright. Bounding
+      // every attempt to single-digit seconds caps the damage app-wide (login, forgot-password,
+      // every M&E notification) regardless of whether the underlying network issue is fixed.
+      connectionTimeout: 8_000,
+      greetingTimeout: 5_000,
+      socketTimeout: 10_000,
     });
   }
 
