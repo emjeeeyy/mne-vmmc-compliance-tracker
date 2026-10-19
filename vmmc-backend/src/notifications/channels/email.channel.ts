@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Transporter, createTransport } from 'nodemailer';
+import { resolve4 } from 'dns/promises';
 import { ChannelResult } from './sms.channel';
 
 const MAX_ATTEMPTS = 3;
@@ -23,17 +24,38 @@ export class EmailChannel implements OnModuleInit {
 
   constructor(private readonly configService: ConfigService) {}
 
-  onModuleInit() {
+  async onModuleInit() {
     const user = this.configService.get<string>('SMTP_USER');
     const password = this.configService.get<string>('SMTP_PASSWORD');
     if (!user || !password) return;
 
     this.fromAddress = user;
+    const host = this.configService.get<string>('SMTP_HOST') ?? 'smtp.gmail.com';
+
+    // Railway's containers report an IPv6-capable network interface that isn't actually
+    // routable to the internet. Nodemailer resolves both A and AAAA records for the SMTP
+    // host and picks a *random* one to connect to — observed for real in production: roughly
+    // half the time it picks the unreachable IPv6 address and the connection fails outright
+    // with ENETUNREACH, not a timeout. Resolving to a literal IPv4 address ourselves and
+    // connecting directly to it sidesteps nodemailer's own dual-stack selection entirely.
+    // `tls.servername` keeps certificate validation correct against the real hostname, since
+    // Gmail's cert is issued for the name, not the IP. Resolved once at startup rather than
+    // per-send — acceptable for a single long-lived Gmail relay; if Gmail ever rotates this
+    // IP mid-deployment, a redeploy re-resolves it.
+    let connectHost = host;
+    try {
+      const addresses = await resolve4(host);
+      if (addresses.length > 0) connectHost = addresses[0];
+    } catch (err) {
+      this.logger.warn(`Could not resolve an IPv4 address for ${host}, falling back to hostname: ${String(err)}`);
+    }
+
     this.transporter = createTransport({
-      host: this.configService.get<string>('SMTP_HOST') ?? 'smtp.gmail.com',
+      host: connectHost,
       port: this.configService.get<number>('SMTP_PORT') ?? 587,
       secure: false,
       auth: { user, pass: password },
+      tls: { servername: host },
       // Nodemailer's own defaults (minutes-long) turn a blocked/throttled outbound SMTP
       // connection into a near-infinite hang — observed for real on Railway, where Gmail
       // silently drops the connection attempt instead of refusing it outright. Bounding
