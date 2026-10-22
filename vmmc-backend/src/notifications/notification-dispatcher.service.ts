@@ -25,6 +25,7 @@ const SUBTYPE_LABELS: Record<string, string> = {
   THREE_MONTH_HR_NOTICE: "You've been non-compliant for 3 months past your deadline. HR has been notified for follow-up — please submit your results immediately to resolve this.",
   SLA_BREACH: 'Your clearance deadline has passed without an approved submission.',
   CLINICAL_ALERT: 'Your submitted result requires immediate clinical review.',
+  MANUAL_REMINDER: 'Reminder from the TB DOTS Unit: your annual clearance is overdue. Please submit your results as soon as possible.',
 };
 
 /** The one place that fans an event out to notifications/escalations — the classifier

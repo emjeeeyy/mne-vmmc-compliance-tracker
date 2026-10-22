@@ -242,3 +242,53 @@ describe('EventClassifierService — PEP / Immunization overdue classification',
     expect(await secondPass.classifier.classifyImmunizationOverdue(dose)).toBe(false);
   });
 });
+
+describe('EventClassifierService.sendManualReminder — admin "Send Reminder"', () => {
+  it('records a MANUAL_REMINDER warning event and dispatches it (in-app + SMS + email via the dispatcher)', async () => {
+    const { classifier, calls, notificationDispatcherService } = buildClassifier([
+      { data: makeRecord({ status: 'OVERDUE' }), error: null }, // the compliance record
+      { data: [], error: null }, // no reminder in the last 24h
+      { data: { ...EVENT_ROW, event_type: 'WARNING', event_subtype: 'MANUAL_REMINDER' }, error: null }, // event insert
+    ]);
+
+    const result = await classifier.sendManualReminder('record-1');
+
+    expect(result.sentAt).toBeTruthy();
+    expect(calls).toEqual(['compliance_records', 'events', 'events']);
+    expect(notificationDispatcherService.handleEvent).toHaveBeenCalledWith(expect.objectContaining({ event_subtype: 'MANUAL_REMINDER', event_type: 'WARNING' }));
+  });
+
+  it('refuses a second reminder within 24 hours (409), without sending anything', async () => {
+    const { classifier, notificationDispatcherService } = buildClassifier([
+      { data: makeRecord({ status: 'OVERDUE' }), error: null },
+      { data: [{ id: 'event-earlier' }], error: null },
+    ]);
+
+    await expect(classifier.sendManualReminder('record-1')).rejects.toMatchObject({ status: 409 });
+    expect(notificationDispatcherService.handleEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses to remind someone already cleared for the cycle', async () => {
+    const { classifier, notificationDispatcherService } = buildClassifier([{ data: makeRecord({ status: 'COMPLIANT' }), error: null }]);
+
+    await expect(classifier.sendManualReminder('record-1')).rejects.toMatchObject({ status: 400 });
+    expect(notificationDispatcherService.handleEvent).not.toHaveBeenCalled();
+  });
+
+  it('404s for an unknown record', async () => {
+    const { classifier } = buildClassifier([{ data: null, error: null }]);
+
+    await expect(classifier.sendManualReminder('missing')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('reports a failure instead of claiming success when the event insert fails', async () => {
+    const { classifier, notificationDispatcherService } = buildClassifier([
+      { data: makeRecord({ status: 'OVERDUE' }), error: null },
+      { data: [], error: null },
+      { data: null, error: { message: 'insert failed' } },
+    ]);
+
+    await expect(classifier.sendManualReminder('record-1')).rejects.toMatchObject({ status: 400 });
+    expect(notificationDispatcherService.handleEvent).not.toHaveBeenCalled();
+  });
+});

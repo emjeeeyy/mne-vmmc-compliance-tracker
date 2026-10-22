@@ -1,13 +1,15 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, FileText, RefreshCw, ShieldCheck, Clock, Users, AlertCircle, BarChart3, TrendingDown, TrendingUp, ChevronLeft, Siren, Download, Check } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileText, ShieldCheck, Clock, Users, AlertCircle, BarChart3, TrendingDown, TrendingUp, ChevronLeft, Siren, Download, Check, Upload, User, CalendarDays, ArrowRight } from 'lucide-react'
 import { fadeRise } from '@/lib/motion'
 import { getRole, getPreciseRole } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { SkeletonBlock, SkeletonCard } from '@/components/Skeleton'
+import HeroBand from '@/components/HeroBand'
+import AdminLanding, { type AdminOverview } from './AdminLanding'
 import { formatFullDate, toCsv } from '@/lib/format'
 
 interface Escalation {
@@ -20,8 +22,25 @@ interface Escalation {
 
 interface MonthlyPoint { label: string; value: number }
 
+interface ScreeningChecklistItem {
+  key: 'APE' | 'HEPB_TITER' | 'IMMUNIZATION'
+  label: string
+  status: 'VERIFIED' | 'DUE' | 'MISSING'
+  detail: string | null
+}
+
+interface ScreeningProgress {
+  verifiedCount: number
+  total: number
+  percent: number
+  items: ScreeningChecklistItem[]
+}
+
 interface StaffOverview {
   role: 'staff'
+  employeeId: string
+  totalPersonnel: number
+  lastAuditedAt: string | null
   nextDue: { date: string; progressPercent: number; triggerLabel: string } | null
   department: { name: string; code: string; complianceRate: number; pendingStaffCount: number }
   urgentActiveActions: number
@@ -29,14 +48,7 @@ interface StaffOverview {
   reportsVerifiedToday: number
   pendingActions: string
   monthlyTrend: MonthlyPoint[]
-}
-
-interface AdminOverview {
-  role: 'admin'
-  hospitalCompliance: { rate: number; trendDelta: number }
-  totalPersonnel: number
-  criticalCases: number
-  annualClearanceProgress: { rate: number; monthlyBreakdown: MonthlyPoint[] }
+  screeningProgress: ScreeningProgress
 }
 
 type Overview = StaffOverview | AdminOverview
@@ -91,7 +103,7 @@ function EscalationsCard({ escalations, onAcknowledge, acknowledging }: { escala
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151' }}>{esc.employee.fullName}</div>
-              <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2, lineHeight: 1.4 }}>{esc.event.message}</div>
+              <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2, lineHeight: 1.4 }}>{esc.event.message}</div>
             </div>
             {esc.status === 'ACKNOWLEDGED' ? (
               <span style={{ background: '#fffbea', color: '#b7791f', borderRadius: 999, padding: '6px 14px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Acknowledged</span>
@@ -182,67 +194,61 @@ function ReportsExportCard() {
   )
 }
 
-function useCountUp(target: number, duration = 900) {
-  const [val, setVal] = useState(0)
-  const ran = useRef(false)
-  useEffect(() => {
-    if (ran.current) return
-    ran.current = true
-    const start = performance.now()
-    const tick = (now: number) => {
-      const p = Math.min((now - start) / duration, 1)
-      setVal(Math.round(p * target))
-      if (p < 1) requestAnimationFrame(tick)
-    }
-    requestAnimationFrame(tick)
-  }, [target, duration])
-  return val
-}
-
-function AnimatedRing({ percent, pendingCount }: { percent: number; pendingCount: number }) {
-  const r = 50
+/** Thin open arc, no track — the arc's gap is centered on 9 o'clock at 75%, matching the mockup. */
+function AnimatedRing({ percent, centerValue, caption, size = 163, fluid = false }: { percent: number; centerValue: string; caption: string; size?: number; fluid?: boolean }) {
+  const stroke = 5
+  const r = (size - stroke) / 2
   const circ = 2 * Math.PI * r
   const [offset, setOffset] = useState(circ)
   const [showLabel, setShowLabel] = useState(false)
   useEffect(() => {
     const t1 = setTimeout(() => setOffset(circ * (1 - percent / 100)), 300)
-    const t2 = setTimeout(() => setShowLabel(true), 1400)
+    const t2 = setTimeout(() => setShowLabel(true), 1100)
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [circ, percent])
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-      <svg width="150" height="150" viewBox="0 0 120 120">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="#1f3151" strokeWidth="14"
-          strokeDasharray={`${circ}`} strokeDashoffset={offset} strokeLinecap="round"
-          transform="rotate(-90 60 60)" style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1)' }} />
-        <text x="60" y="54" textAnchor="middle" fill="#1f3151" fontSize="32" fontWeight="800" fontFamily="Poppins,sans-serif"
-          style={{ opacity: showLabel ? 1 : 0, transition: 'opacity 0.4s' }}>{String(pendingCount).padStart(2, '0')}</text>
-        <text x="60" y="72" textAnchor="middle" fill="#718096" fontSize="10" fontWeight="700" fontFamily="Public Sans,sans-serif"
-          style={{ opacity: showLabel ? 1 : 0, transition: 'opacity 0.4s 0.1s' }}>PENDING STAFF</text>
+    // fluid: the mockup's 163px ring at 1440 (11.3vw) scales with the card instead of staying fixed.
+    <div style={{ position: 'relative', width: fluid ? 'clamp(140px, 11.3vw, 240px)' : size, aspectRatio: '1', margin: '0 auto', flexShrink: 0 }}>
+      <svg width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} aria-hidden="true" style={{ display: 'block' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#008d46" strokeWidth={stroke}
+          strokeDasharray={`${circ}`} strokeDashoffset={offset}
+          transform={`rotate(-135 ${size / 2} ${size / 2})`} style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1)' }} />
       </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', opacity: showLabel ? 1 : 0, transition: 'opacity 0.4s' }}>
+        <div style={{ fontSize: fluid ? 'clamp(26px, 2.22vw, 48px)' : 32, fontWeight: 700, color: '#2e3137', lineHeight: 1.06 }}>{centerValue}</div>
+        <div style={{ fontSize: 11, fontWeight: 500, color: '#64748b', letterSpacing: '0.02em', lineHeight: '14px' }}>{caption}</div>
+      </div>
     </div>
   )
 }
 
-interface StatCardDef { icon: typeof AlertTriangle; color: string; bg: string; label: string; value: number | null; suffix: string }
-
-function StatCard({ icon: Icon, color, bg, label, value, suffix, index }: StatCardDef & { index: number }) {
-  const count = useCountUp(value ?? 0, 850)
-  return (
-    <motion.div custom={index} variants={fadeRise} initial="hidden" animate="visible"
-      whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
-      style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: '24px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
-    >
-      <div style={{ width: 44, height: 44, borderRadius: 12, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-        <Icon size={22} color={color} strokeWidth={2.5} />
-      </div>
-      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#718096', marginBottom: 6 }}>{label}</div>
-      <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151' }}>
-        {value !== null ? `${count} ${suffix.trim()}` : suffix}
-      </div>
-    </motion.div>
+function StatusDot({ verified }: { verified: boolean }) {
+  return verified ? (
+    <span style={{ width: 16, height: 16, borderRadius: '50%', background: '#4b7b3c', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <Check size={10} color="#fff" strokeWidth={3.5} />
+    </span>
+  ) : (
+    <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0 }} aria-hidden="true">
+      <circle cx="8" cy="8" r="8" fill="#e1a13c" />
+      <path d="M8 4.2V8.3L10.6 9.6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </svg>
   )
 }
+
+function ScreeningChecklistRow({ item }: { item: ScreeningChecklistItem }) {
+  const verified = item.status === 'VERIFIED'
+  const ink = verified ? '#101010' : '#7b381b'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 32, padding: '0 14px 0 16px', borderRadius: 8, border: `1px solid ${verified ? '#e8edf3' : '#f6e2a3'}`, background: verified ? '#f7f9fc' : '#fffbe8', fontFamily: 'Poppins,sans-serif' }}>
+      <StatusDot verified={verified} />
+      <div style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 400, color: ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: verified ? '#006042' : ink, flexShrink: 0 }}>
+        {verified ? 'Verified' : item.detail}
+      </div>
+    </div>
+  )
+}
+
 
 function TrendBars({ data }: { data: MonthlyPoint[] }) {
   const max = Math.max(1, ...data.map(d => d.value))
@@ -262,11 +268,35 @@ function TrendBars({ data }: { data: MonthlyPoint[] }) {
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         {data.map((d, i) => (
-          <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#a0aec0' }}>{d.label}</div>
+          <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#5f6b7d' }}>{d.label}</div>
         ))}
       </div>
     </div>
   )
+}
+
+function daysRemaining(dateStr: string): number {
+  const due = new Date(dateStr)
+  const today = new Date()
+  due.setHours(0, 0, 0, 0)
+  today.setHours(0, 0, 0, 0)
+  return Math.round((due.getTime() - today.getTime()) / 86_400_000)
+}
+
+function monthName(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' })
+}
+
+/** A raw day-count against `nextDue.date` goes negative once the deadline passes — meaningless
+ * once the employee has actually cleared this cycle (the date itself doesn't move forward until
+ * next year's record exists), and needs "Overdue" framing rather than a bare negative number
+ * when they haven't cleared it. `apeVerified` comes from screeningProgress, not nextDue itself,
+ * since nextDue's own progressPercent/date can't distinguish "cleared" from "deadline passed". */
+function screeningCycleStatusText(dateStr: string, apeVerified: boolean): string {
+  if (apeVerified) return `Cleared for this cycle (Birth-Month ${monthName(dateStr)} Schedule)`
+  const days = daysRemaining(dateStr)
+  if (days < 0) return `Overdue by ${Math.abs(days)} Day${Math.abs(days) === 1 ? '' : 's'} (Birth-Month ${monthName(dateStr)} Schedule)`
+  return `Next Screening Due: ${days} Day${days === 1 ? '' : 's'} Remaining (Birth-Month ${monthName(dateStr)} Schedule)`
 }
 
 function monthlyStats(data: MonthlyPoint[]) {
@@ -321,12 +351,6 @@ export default function Dashboard() {
   const staffData = overview.role === 'staff' ? overview : null
   const adminMonthly = adminData?.annualClearanceProgress.monthlyBreakdown ?? []
   const adminStats = monthlyStats(adminMonthly)
-  const staffStatCards: StatCardDef[] = [
-    { icon: AlertTriangle, color: '#f56565', bg: '#fff5f5', label: 'URGENT ACTIVE ACTIONS', value: staffData?.urgentActiveActions ?? 0, suffix: ' Cases' },
-    { icon: CheckCircle2, color: '#48bb78', bg: '#f0fff4', label: 'REGISTRY COMPLIANCE', value: staffData?.registryCompliance ?? 0, suffix: ' Completed' },
-    { icon: FileText, color: '#4299e1', bg: '#ebf8ff', label: 'REPORTS VERIFIED TODAY', value: staffData?.reportsVerifiedToday ?? 0, suffix: ' Files' },
-    { icon: RefreshCw, color: '#9f7aea', bg: '#faf5ff', label: 'REGISTRY CYCLE REFRESH', value: null, suffix: 'Annual' },
-  ]
 
   return (
     <>
@@ -348,7 +372,7 @@ export default function Dashboard() {
 
               <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 16 }}>
                 <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Detailed Analytics</h1>
-                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Annual Clearance Progress · FY 2026</div>
+                <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Annual Clearance Progress · FY 2026</div>
               </motion.div>
 
               <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 16 }}>
@@ -358,7 +382,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 20 }}>
                   <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151' }}>{adminData?.annualClearanceProgress.rate ?? 0}%</span>
-                  <span style={{ fontSize: 12, color: '#a0aec0' }}>of FY {new Date().getFullYear()}</span>
+                  <span style={{ fontSize: 12, color: '#5f6b7d' }}>of FY {new Date().getFullYear()}</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8, height: 120 }}>
@@ -376,7 +400,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                   {adminMonthly.map(d => (
-                    <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#a0aec0' }}>{d.label}</div>
+                    <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#5f6b7d' }}>{d.label}</div>
                   ))}
                 </div>
               </motion.div>
@@ -388,9 +412,9 @@ export default function Dashboard() {
                   { label: 'Lowest', month: adminStats.lowest.label, value: `${adminStats.lowest.value}%`, color: '#e53e3e' },
                 ].map((s, i) => (
                   <motion.div key={s.label} custom={3 + i} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: '14px 12px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</div>
+                    <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 4 }}>{s.label}</div>
                     <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
-                    {s.month && <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, marginTop: 2 }}>{s.month}</div>}
+                    {s.month && <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, marginTop: 2 }}>{s.month}</div>}
                   </motion.div>
                 ))}
               </div>
@@ -422,7 +446,7 @@ export default function Dashboard() {
           <>
             <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
               <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Hospital Metrics</h1>
-              <span style={{ background: '#ebf8ff', color: '#3182ce', borderRadius: 999, padding: '6px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Live Sync</span>
+              <span style={{ background: '#ebf8ff', color: '#2b6cb0', borderRadius: 999, padding: '6px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Live Sync</span>
             </motion.div>
 
             <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', borderRadius: 20, padding: 20, color: '#fff', marginBottom: 16 }}>
@@ -447,19 +471,19 @@ export default function Dashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
               <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <Users size={18} color="#4299e1" />
-                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Total Personnel</div>
+                <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Total Personnel</div>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#2b6cb0', marginTop: 4 }}>{adminData?.totalPersonnel ?? 0}</div>
               </motion.div>
               <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <AlertCircle size={18} color="#e53e3e" />
-                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Critical Cases</div>
+                <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Critical Cases</div>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#e53e3e', marginTop: 4 }}>{adminData?.criticalCases ?? 0}</div>
               </motion.div>
             </div>
 
             <ReportsExportCard />
 
-            <motion.div custom={4} variants={fadeRise} initial="hidden" animate="visible" style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 12 }}>
+            <motion.div custom={4} variants={fadeRise} initial="hidden" animate="visible" style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 12 }}>
               Hospital Trends
             </motion.div>
 
@@ -470,7 +494,7 @@ export default function Dashboard() {
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 16 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151' }}>{adminData?.annualClearanceProgress.rate ?? 0}%</span>
-                <span style={{ fontSize: 12, color: '#a0aec0' }}>of FY {new Date().getFullYear()}</span>
+                <span style={{ fontSize: 12, color: '#5f6b7d' }}>of FY {new Date().getFullYear()}</span>
               </div>
               <TrendBars data={adminMonthly} />
               <button
@@ -484,44 +508,87 @@ export default function Dashboard() {
           )
         ) : (
           <>
-            <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
-              <div>
-                <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Health Status</h1>
-                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Compliance Overview</div>
+            <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible"
+              style={{ borderRadius: 20, overflow: 'hidden', background: 'linear-gradient(135deg, #0c4f38 0%, #1f3151 100%)', padding: 20, color: '#fff', marginBottom: 16 }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.12)', borderRadius: 999, padding: '5px 12px', fontSize: 11, fontWeight: 700, marginBottom: 14 }}>
+                <ShieldCheck size={12} color="#4ade80" /> #1 hospital for our heroes
+              </span>
+              <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, lineHeight: 1.25, margin: 0, marginBottom: 14 }}>
+                My <span style={{ color: '#4ade80' }}>Health Clearance</span>{' '}&amp; Screening Center
+              </h1>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 999, padding: '6px 12px', fontSize: 11, fontWeight: 700 }}>
+                  <Users size={12} /> {staffData?.totalPersonnel ?? 0} Staff
+                </span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 999, padding: '6px 12px', fontSize: 11, fontWeight: 700 }}>
+                  <Clock size={12} /> Birth-Month APE Cycle
+                </span>
               </div>
-              <span style={{ background: '#e6f9ee', color: '#008d46', borderRadius: 999, padding: '6px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Annual Cycle: {new Date().getFullYear()}</span>
             </motion.div>
 
             <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', borderRadius: 20, padding: 20, color: '#fff', marginBottom: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#cbd5e0' }}>Your Next X-Ray Due</span>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ background: '#111827', borderRadius: 999, padding: '5px 12px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Surveillance Cycle: {new Date().getFullYear()}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#008541', borderRadius: 999, padding: '5px 12px', fontSize: 11, fontWeight: 800 }}>
+                  <CheckCircle2 size={12} /> Account Active
+                </span>
               </div>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#cbd5e0', marginBottom: 6 }}>Annual Physical Exam Deadline</div>
               <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, marginBottom: 14 }}>{staffData?.nextDue ? formatFullDate(staffData.nextDue.date) : '—'}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
-                  <div style={{ width: `${staffData?.nextDue?.progressPercent ?? 0}%`, height: '100%', background: 'linear-gradient(to right, #4ade80, #00b06b)', borderRadius: 999 }} />
-                </div>
-                <span style={{ fontSize: 12, fontWeight: 700 }}>{staffData?.nextDue?.progressPercent ?? 0}%</span>
-              </div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.14)', borderRadius: 999, padding: '6px 12px', fontSize: 12, fontWeight: 700, marginBottom: 12, textTransform: 'uppercase' }}>
-                <Clock size={12} /> {staffData?.nextDue?.triggerLabel ?? 'NO ACTIVE CYCLE'}
-              </div>
-              <div style={{ fontSize: 12, color: '#cbd5e0' }}>Annual Chest X-Ray Requirement</div>
+              {(() => {
+                const apeVerified = staffData?.screeningProgress.items.find(i => i.key === 'APE')?.status === 'VERIFIED'
+                const overdue = staffData?.nextDue && !apeVerified && daysRemaining(staffData.nextDue.date) < 0
+                const dotColor = overdue ? '#fc8181' : '#68d391'
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, fontSize: 12, fontWeight: 700, color: dotColor }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, display: 'inline-block', flexShrink: 0 }} />
+                    {staffData?.nextDue ? screeningCycleStatusText(staffData.nextDue.date, apeVerified ?? false) : 'No active surveillance cycle'}
+                  </div>
+                )
+              })()}
+              <button onClick={() => router.push('/upload')}
+                style={{ width: '100%', minHeight: 44, background: '#008541', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Submit File
+              </button>
             </motion.div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
               <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <ShieldCheck size={18} color="#4299e1" />
-                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Unit Compliance</div>
+                <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Unit Compliance</div>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#2b6cb0', marginTop: 4 }}>{staffData?.department.complianceRate ?? 0}%</div>
               </motion.div>
               <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <Clock size={18} color="#e53e3e" />
-                <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Pending X-Rays</div>
+                <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Pending X-Rays</div>
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#e53e3e', marginTop: 4 }}>{String(staffData?.department.pendingStaffCount ?? 0).padStart(2, '0')}</div>
               </motion.div>
             </div>
+
+            <motion.div custom={4} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: 20, boxShadow: '0 2px 4px rgba(0,0,0,0.02)', marginBottom: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151' }}>My Screening Progress</div>
+                <span style={{ border: '1px solid #00b06b', background: '#e6f9ee', color: '#047857', borderRadius: 999, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>
+                  {staffData?.screeningProgress.percent ?? 0}% Complete
+                </span>
+              </div>
+              <AnimatedRing
+                size={140}
+                percent={staffData?.screeningProgress.percent ?? 0}
+                centerValue={`${staffData?.screeningProgress.verifiedCount ?? 0}/${staffData?.screeningProgress.total ?? 3}`}
+                caption="REQUIREMENTS"
+              />
+              <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(staffData?.screeningProgress.items ?? []).map(item => <ScreeningChecklistRow key={item.key} item={item} />)}
+              </div>
+              <button onClick={() => router.push('/upload')}
+                style={{ width: '100%', minHeight: 44, marginTop: 12, background: '#111827', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              >
+                <Upload size={14} /> Submit Missing Document
+              </button>
+            </motion.div>
 
             {isUnitHead && (
               <div style={{ marginTop: 16 }}>
@@ -533,7 +600,7 @@ export default function Dashboard() {
       </div>
 
       {/* Tablet / desktop dashboard */}
-      <div className="hidden sm:block" style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div className="hidden sm:block" style={{ maxWidth: role === 'admin' && showAnalytics ? 1100 : undefined, margin: '0 auto' }}>
         {role === 'admin' ? (
           showAnalytics ? (
             <div style={{ maxWidth: 700 }}>
@@ -550,7 +617,7 @@ export default function Dashboard() {
 
               <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 24 }}>
                 <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>Detailed Analytics</h1>
-                <p style={{ fontSize: 13, color: '#718096', margin: 0 }}>Annual Clearance Progress · FY 2026</p>
+                <p style={{ fontSize: 13, color: '#5f6b7d', margin: 0 }}>Annual Clearance Progress · FY 2026</p>
               </motion.div>
 
               <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: 32, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginBottom: 24 }}>
@@ -560,7 +627,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 24 }}>
                   <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 32, fontWeight: 800, color: '#1f3151' }}>{adminData?.annualClearanceProgress.rate ?? 0}%</span>
-                  <span style={{ fontSize: 12, color: '#a0aec0' }}>of FY {new Date().getFullYear()}</span>
+                  <span style={{ fontSize: 12, color: '#5f6b7d' }}>of FY {new Date().getFullYear()}</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: 160 }}>
@@ -578,7 +645,7 @@ export default function Dashboard() {
                 </div>
                 <div style={{ display: 'flex', gap: 12, marginTop: 10 }}>
                   {adminMonthly.map(d => (
-                    <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#a0aec0' }}>{d.label}</div>
+                    <div key={d.label} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#5f6b7d' }}>{d.label}</div>
                   ))}
                 </div>
               </motion.div>
@@ -590,9 +657,9 @@ export default function Dashboard() {
                   { label: 'Lowest', month: adminStats.lowest.label, value: `${adminStats.lowest.value}%`, color: '#e53e3e' },
                 ].map((s, i) => (
                   <motion.div key={s.label} custom={3 + i} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: '20px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', textAlign: 'center' }}>
-                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 6 }}>{s.label}</div>
                     <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
-                    {s.month && <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, marginTop: 4 }}>{s.month}</div>}
+                    {s.month && <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, marginTop: 4 }}>{s.month}</div>}
                   </motion.div>
                 ))}
               </div>
@@ -620,180 +687,114 @@ export default function Dashboard() {
                 </div>
               </motion.div>
             </div>
-          ) : (
-            <>
-              <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>Hospital Compliance Overview</h1>
-                  <p style={{ fontSize: 14, color: '#718096', marginBottom: 32 }}>Real-time hospital-wide surveillance analytics and personnel compliance tracking.</p>
+          ) : adminData ? (
+            <AdminLanding data={adminData} onShowAnalytics={() => setShowAnalytics(true)} moreContent={<ReportsExportCard />} />
+          ) : null
+        ) : (
+        // Breaks out of <main>'s padding so the hero can continue the header's gradient edge to
+        // edge — in the mockup the header and hero are one unbroken band, not a card on a page.
+        <div className="sm:-mx-6 sm:-mt-6 lg:-mx-12 lg:-mt-12" style={{ fontFamily: 'Poppins,sans-serif' }}>
+          <HeroBand
+            title={<>My <span style={{ color: '#80d4aa' }}>Health Clearance</span><br />&amp; Screening Center</>}
+            description="View your personal annual physical exam status, submit diagnostic files (Chest X-Rays, vaccine cards), and check pending clearance approvals."
+            chips={[{ icon: User, text: `${staffData?.totalPersonnel ?? 0} Staff Registered` }, { icon: CalendarDays, text: 'Birth-Month APE Cycle' }]}
+          />
+
+          <div className="px-6 lg:px-[2.7vw]" style={{ paddingTop: 'clamp(24px, 2.9vw, 60px)' }}>
+            {/* 3:2 on small laptops so the progress card's checklist labels don't truncate; the mockup's 2:1 from xl up. */}
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-6 xl:gap-[2.7vw]">
+              <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible"
+                style={{ borderRadius: 18, padding: 'clamp(22px, 2vw, 32px) clamp(20px, 2.8vw, 40px)', color: '#fff', display: 'flex', flexDirection: 'column', background: 'radial-gradient(farthest-side at 100% 0%, #0c6246 0%, #134747 50%, #1b2a47 92%) #1b2a47' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', height: 28, padding: '0 16px', borderRadius: 999, background: '#121c2e', fontSize: 11, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                    Surveillance Cycle: {new Date().getFullYear()}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 28, padding: '0 14px', borderRadius: 999, background: '#0e4337', border: '1px solid #00e2ae', color: '#00e2ae', fontSize: 12, fontWeight: 600 }}>
+                    <span style={{ width: 14, height: 14, borderRadius: '50%', background: '#00e2ae', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Check size={9} color="#0e4337" strokeWidth={4} />
+                    </span>
+                    Account Active
+                  </span>
                 </div>
-                <span style={{ background: '#ebf8ff', color: '#3182ce', borderRadius: 999, padding: '8px 16px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0 }}>Live Sync</span>
+                <div style={{ marginTop: 'clamp(24px, 3vw, 44px)', fontSize: 12, fontWeight: 500, letterSpacing: '0.03em', textTransform: 'uppercase', color: '#8aa1b3' }}>Annual Physical Exam Deadline</div>
+                <div style={{ fontSize: 'clamp(28px, 2.5vw, 56px)', fontWeight: 700, lineHeight: 1.17, letterSpacing: '-0.01em', marginTop: 2 }}>{staffData?.nextDue ? formatFullDate(staffData.nextDue.date) : '—'}</div>
+                {(() => {
+                  const apeVerified = staffData?.screeningProgress.items.find(i => i.key === 'APE')?.status === 'VERIFIED'
+                  const overdue = staffData?.nextDue && !apeVerified && daysRemaining(staffData.nextDue.date) < 0
+                  const dotColor = overdue ? '#fc8181' : '#64d09e'
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, fontSize: 13, fontWeight: 700, color: dotColor }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
+                      {staffData?.nextDue ? screeningCycleStatusText(staffData.nextDue.date, apeVerified ?? false) : 'No active surveillance cycle'}
+                    </div>
+                  )
+                })()}
+                <div style={{ marginTop: 24, background: '#16233c', borderRadius: 10, padding: '14px 20px 14px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <span style={{ width: 44, height: 44, borderRadius: '50%', background: '#1b2a48', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <AlertTriangle size={20} color="#e1a13c" strokeWidth={2} />
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#fff7f6' }}>Pending Health Requirement</div>
+                    <div style={{ fontSize: 12, color: '#7f99ac', marginTop: 1 }}>{staffData?.pendingActions ?? '—'}</div>
+                  </div>
+                  <motion.button onClick={() => router.push('/upload')}
+                    whileHover={{ filter: 'brightness(1.1)' }} whileTap={{ scale: 0.97 }}
+                    style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, background: '#007a53', color: '#fff', border: 'none', borderRadius: 4, padding: '4px 10px', fontFamily: 'Poppins,sans-serif', fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                  >
+                    Submit File <ArrowRight size={12} strokeWidth={2.5} />
+                  </motion.button>
+                </div>
+                <div style={{ flex: 1, minHeight: 32 }} />
+                <div style={{ borderTop: '1px solid #29364d', paddingTop: 18, display: 'grid', gridTemplateColumns: '28% 31% 1fr' }}>
+                  {[
+                    { label: 'Department:', value: staffData?.department.name ?? '—' },
+                    { label: 'Staff ID', value: staffData?.employeeId ?? '—' },
+                    { label: 'Last Audited', value: staffData?.lastAuditedAt ? formatFullDate(staffData.lastAuditedAt) : '—' },
+                  ].map(item => (
+                    <div key={item.label} style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: '#8aa1b3' }}>{item.label}</div>
+                      <div style={{ fontSize: 14, fontWeight: 600, marginTop: 2 }}>{item.value}</div>
+                    </div>
+                  ))}
+                </div>
               </motion.div>
 
-              <div className="flex flex-col lg:flex-row gap-6" style={{ marginBottom: 24 }}>
-                <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible"
-                  className="w-full lg:flex-[0_0_64%]"
-                  style={{ borderRadius: 20, position: 'relative', overflow: 'hidden', background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', padding: '32px 36px', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                    <span style={{ background: 'rgba(0,0,0,0.25)', borderRadius: 999, padding: '6px 16px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>HOSPITAL COMPLIANCE</span>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#4ade80', flexShrink: 0 }} />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 24 }}>
-                    <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 40, fontWeight: 800, letterSpacing: '-0.02em' }}>{adminData?.hospitalCompliance.rate ?? 0}%</span>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13, fontWeight: 700, color: (adminData?.hospitalCompliance.trendDelta ?? 0) < 0 ? '#fc8181' : '#68d391' }}>
-                      {(adminData?.hospitalCompliance.trendDelta ?? 0) < 0 ? <TrendingDown size={14} /> : <TrendingUp size={14} />} {Math.abs(adminData?.hospitalCompliance.trendDelta ?? 0)}%
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                    <div style={{ flex: 1, height: 8, background: 'rgba(255,255,255,0.15)', borderRadius: 999, overflow: 'hidden' }}>
-                      <div style={{ width: `${adminData?.hospitalCompliance.rate ?? 0}%`, height: '100%', background: 'linear-gradient(to right, #4ade80, #00b06b)', borderRadius: 999 }} />
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#cbd5e0' }}>Goal: 95% Occupational Safety Standard</div>
-                </motion.div>
-
-                <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible"
-                  whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
-                  className="w-full lg:flex-1"
-                  style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: '32px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column' }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4a5568', fontFamily: 'Public Sans,sans-serif' }}>ANNUAL CLEARANCE PROGRESS</div>
-                    <BarChart3 size={18} color="#4299e1" style={{ flexShrink: 0 }} />
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 20 }}>
-                    <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 32, fontWeight: 800, color: '#1f3151', letterSpacing: '-0.02em' }}>{adminData?.annualClearanceProgress.rate ?? 0}%</span>
-                    <span style={{ fontSize: 12, color: '#a0aec0' }}>of FY {new Date().getFullYear()}</span>
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
-                    <TrendBars data={adminMonthly} />
-                  </div>
-                  <motion.button onClick={() => setShowAnalytics(true)}
-                    whileHover={{ filter: 'brightness(1.1)', scale: 1.01 }} whileTap={{ scale: 0.98 }}
-                    style={{ marginTop: 24, width: '100%', padding: '16px 20px', background: '#111827', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                  >
-                    <span>View Detailed Analytics</span>
-                    <span style={{ fontSize: 18 }}>›</span>
-                  </motion.button>
-                </motion.div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6" style={{ marginBottom: 24 }}>
-                <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible"
-                  whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
-                  style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
-                >
-                  <Users size={20} color="#4299e1" />
-                  <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 12 }}>Total Personnel</div>
-                  <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 28, fontWeight: 800, color: '#2b6cb0', marginTop: 4 }}>{adminData?.totalPersonnel ?? 0}</div>
-                </motion.div>
-                <motion.div custom={4} variants={fadeRise} initial="hidden" animate="visible"
-                  whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
-                  style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', padding: 24, boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
-                >
-                  <AlertCircle size={20} color="#e53e3e" />
-                  <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 12 }}>Critical Cases</div>
-                  <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 28, fontWeight: 800, color: '#e53e3e', marginTop: 4 }}>{adminData?.criticalCases ?? 0}</div>
-                </motion.div>
-              </div>
-
-              <ReportsExportCard />
-            </>
-          )
-        ) : (
-        <>
-        <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible">
-          <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>Staff Health Status Overview</h1>
-          <p style={{ fontSize: 14, color: '#718096', marginBottom: 32 }}>Real-time surveillance analytics, personal checkups, and department compliance tracking.</p>
-        </motion.div>
-
-        <div className="flex flex-col lg:flex-row gap-6" style={{ marginBottom: 24 }}>
-          <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible"
-            className="w-full lg:flex-[0_0_64%]"
-            style={{ borderRadius: 20, position: 'relative', overflow: 'hidden', background: 'linear-gradient(45deg, #1f3151 0%, #1f3151 40%, #0c4f38 75%, #00703f 100%)', padding: '32px 36px', color: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <span style={{ background: '#111827', borderRadius: 999, padding: '6px 16px', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>SURVEILLANCE PERIOD</span>
-              <span style={{ background: '#00b06b', borderRadius: 999, padding: '6px 16px', fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>ANNUAL CYCLE: {new Date().getFullYear()}</span>
-            </div>
-            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 40, fontWeight: 800, marginBottom: 12, letterSpacing: '-0.02em' }}>{staffData?.nextDue ? formatFullDate(staffData.nextDue.date) : '—'}</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, fontWeight: 700, color: '#68d391', marginBottom: 24, letterSpacing: '0.05em' }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#68d391', display: 'inline-block' }} />
-              NEXT COMPLIANCE DUE: {staffData?.nextDue ? formatFullDate(staffData.nextDue.date).toUpperCase() : 'N/A'}
-            </div>
-            <div style={{ background: '#192b3d', borderRadius: 12, padding: '16px 20px', marginBottom: 28, display: 'flex', alignItems: 'center', gap: 14 }}>
-              <AlertTriangle size={20} color="#f6ad55" strokeWidth={2.5} style={{ flexShrink: 0 }} />
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#a0aec0', marginBottom: 4 }}>PENDING ACTIONS:</div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{staffData?.pendingActions ?? '—'}</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 40 }}>
-              {[{ label: 'Department', value: staffData?.department.name ?? '—' }, { label: 'Department Code', value: staffData?.department.code ?? '—' }].map(item => (
-                <div key={item.label}>
-                  <div style={{ fontSize: 12, color: '#cbd5e0', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontWeight: 600 }}>{item.label}:</div>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>{item.value}</div>
+              <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible"
+                style={{ background: '#fff', borderRadius: 20, border: '1px solid #edf0f3', padding: '22px 22px 30px', boxShadow: '0 1px 3px rgba(16,24,40,0.05)', display: 'flex', flexDirection: 'column' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ fontSize: 17, fontWeight: 700, color: '#111827' }}>My Screening Progress</div>
+                  <span style={{ border: '1px solid #a8ead0', background: '#e4fcf3', color: '#047857', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {staffData?.screeningProgress.percent ?? 0}% Complete
+                  </span>
                 </div>
-              ))}
+                <div style={{ height: 1, background: '#f0f2f5', marginTop: 14, marginBottom: 26 }} />
+                <AnimatedRing
+                  fluid
+                  percent={staffData?.screeningProgress.percent ?? 0}
+                  centerValue={`${staffData?.screeningProgress.verifiedCount ?? 0}/${staffData?.screeningProgress.total ?? 3}`}
+                  caption="REQUIREMENTS"
+                />
+                <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {(staffData?.screeningProgress.items ?? []).map(item => <ScreeningChecklistRow key={item.key} item={item} />)}
+                </div>
+                <motion.button onClick={() => router.push('/upload')}
+                  whileHover={{ filter: 'brightness(1.25)' }} whileTap={{ scale: 0.98 }}
+                  style={{ marginTop: 14, width: '100%', height: 34, background: '#111625', color: '#fff', border: 'none', borderRadius: 7, fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+                >
+                  <Upload size={16} color="#80d4aa" /> Submit Missing Document
+                </motion.button>
+              </motion.div>
             </div>
-          </motion.div>
 
-          <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible"
-            whileHover={{ y: -3, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
-            className="w-full lg:flex-1"
-            style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: '32px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', display: 'flex', flexDirection: 'column' }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4a5568', marginBottom: 12, fontFamily: 'Public Sans,sans-serif' }}>MY DEPARTMENT COMPLIANCE</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, justifyContent: 'space-between' }}>
-              <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 32, fontWeight: 800, color: '#1f3151', letterSpacing: '-0.02em' }}>{staffData?.department.complianceRate ?? 0}% Done</span>
-              {(staffData?.department.complianceRate ?? 0) >= 80 ? (
-                <span style={{ border: '1px solid #00b06b', color: '#00b06b', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>On Track</span>
-              ) : (
-                <span style={{ border: '1px solid #f6ad55', color: '#b7791f', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Needs Attention</span>
-              )}
-            </div>
-            <AnimatedRing percent={staffData?.department.complianceRate ?? 0} pendingCount={staffData?.department.pendingStaffCount ?? 0} />
-            <motion.button onClick={() => router.push('/compliance')}
-              whileHover={{ filter: 'brightness(1.1)', scale: 1.01 }} whileTap={{ scale: 0.98 }}
-              style={{ marginTop: 24, width: '100%', padding: '16px 20px', background: '#008d46', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.3 }}>
-                <span>INSPECT</span>
-                <span>DEPARTMENT STAFF</span>
+            {isUnitHead && (
+              <div style={{ marginTop: 40 }}>
+                <EscalationsCard escalations={escalations} onAcknowledge={handleAcknowledge} acknowledging={acknowledging} />
               </div>
-              <span style={{ fontSize: 18 }}>›</span>
-            </motion.button>
-          </motion.div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" style={{ marginBottom: 24 }}>
-          {staffStatCards.map((card, i) => <StatCard key={card.label} {...card} index={i + 3} />)}
-        </div>
-
-        {isUnitHead && (
-          <EscalationsCard escalations={escalations} onAcknowledge={handleAcknowledge} acknowledging={acknowledging} />
-        )}
-
-        <motion.div custom={7} variants={fadeRise} initial="hidden" animate="visible"
-          whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
-          className="flex flex-col sm:flex-row items-start sm:items-center gap-6"
-          style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', padding: '32px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}
-        >
-          <div style={{ width: 52, height: 52, borderRadius: 14, background: '#f0fff4', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <FileText size={26} color="#38a169" />
+            )}
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 18, color: '#1f3151', marginBottom: 4 }}>Are you ready to submit your latest pulmonary laboratory report?</div>
-            <div style={{ fontSize: 14, color: '#718096', lineHeight: 1.6 }}>Quickly upload official CXR scans or GeneXpert molecular assays for instant department verification.</div>
-          </div>
-          <motion.button onClick={() => router.push('/upload')}
-            whileHover={{ filter: 'brightness(1.15)', y: -1 }} whileTap={{ scale: 0.98 }}
-            className="w-full sm:w-auto"
-            style={{ flexShrink: 0, background: '#111827', color: '#fff', border: 'none', borderRadius: 10, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, padding: '16px 24px', cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.05em', lineHeight: 1.4, textAlign: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-          >UPLOAD<br />LABORATORY<br />DOCUMENT</motion.button>
-        </motion.div>
-        </>
+        </div>
         )}
       </div>
     </>

@@ -107,7 +107,11 @@ async function request<T>(path: string, options: ApiRequestOptions = {}): Promis
       }
 
       if (res.status === 204) return undefined as T
-      return (await res.json()) as T
+      // A 200 with no body is how the API answers "nothing there" (a handler that returns null, e.g. an
+      // admin with no signature yet, or a person with no pre-employment record). Parsing it as JSON threw,
+      // which the catch below treated as a dropped connection: retried twice, then reported as a network error.
+      const text = await res.text()
+      return (text ? JSON.parse(text) : null) as T
     } catch (err) {
       clearTimeout(timeout)
 
@@ -127,6 +131,8 @@ export const api = {
   get: <T>(path: string, options?: ApiRequestOptions) => request<T>(path, { ...options, method: 'GET' }),
   post: <T>(path: string, body?: unknown, options?: ApiRequestOptions) =>
     request<T>(path, { ...options, method: 'POST', body }),
+  put: <T>(path: string, body?: unknown, options?: ApiRequestOptions) =>
+    request<T>(path, { ...options, method: 'PUT', body }),
   patch: <T>(path: string, body?: unknown, options?: ApiRequestOptions) =>
     request<T>(path, { ...options, method: 'PATCH', body }),
   delete: <T>(path: string, options?: ApiRequestOptions) => request<T>(path, { ...options, method: 'DELETE' }),

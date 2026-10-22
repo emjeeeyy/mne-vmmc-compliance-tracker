@@ -21,9 +21,9 @@ Runs on `$PORT` (default 3000, honored automatically by the Next.js CLI). Hot re
 - `src/app/layout.tsx` - Root layout (html/body shell, global metadata)
 - `src/app/page.tsx` - `/` route; client-redirects to `/dashboard` or `/login` based on auth
 - `src/app/login/page.tsx` - Login route
-- `src/app/(dashboard)/layout.tsx` - Auth-guarded shell (top bar + sidebar) wrapping dashboard/compliance/upload/profile
+- `src/app/(dashboard)/layout.tsx` - Auth-guarded shell (single top header band, no sidebar) wrapping dashboard/compliance/upload/profile
 - `src/screens/*.tsx` - Screen implementations (rendered by the thin route pages under `src/app`)
-- `src/components/Layout.tsx` - App chrome (header + sidebar nav)
+- `src/components/Layout.tsx` - App chrome: one gradient header band with inline nav (xl+), hamburger dropdown below xl, bottom tab bar on phones
 - `src/lib/auth.ts` - sessionStorage-based auth helpers
 - `src/lib/useAuthGuard.ts` - Client-side redirect guard (`'auth'` | `'guest'` modes) used by protected/guest routes
 - `src/app/globals.css` - Global styles and Tailwind CSS import

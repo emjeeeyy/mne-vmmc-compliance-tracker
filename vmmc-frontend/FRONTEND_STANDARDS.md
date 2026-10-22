@@ -96,8 +96,64 @@ Tailwind defaults are used as-is — **there is no separate "tablet" breakpoint 
 |---|---|---|
 | (none) | < 640px | Mobile-native layout |
 | `sm` | 640px | Mobile → tablet/desktop switch-over starts |
-| `lg` | 1024px | Sidebar goes from off-canvas drawer to static; tablet → desktop |
-| `xl` | 1280px | Used when a `sm:` breakpoint needs to be pushed coarser (see gotcha below) |
+| `lg` | 1024px | Tablet → desktop (two-column layouts, hero photo appears) |
+| `xl` | 1280px | Header's inline nav appears (hamburger dropdown below this). Also used when a `sm:` breakpoint needs to be pushed coarser (see gotcha below) |
+
+**There is no sidebar.** Since the Oct 2026 mockup pass, the chrome is a single gradient header band (`linear-gradient(90deg, #1b2a47, #265d4c)`): 72px below `xl`, 80px from `xl`, then growing to 88px at 1920 and 96px at 2560.
+
+**The header is a 3-column grid from `xl`: `[minmax(0,1fr) auto minmax(0,1fr)]`.** Equal side columns keep the nav at the exact center regardless of logo or profile width.
+- **Never hide the profile name or tagline to make room.** An earlier version did, and the user flagged it ("the name of the user shrinks when it should be there whenever i resize it").
+- **What sets the space budget.** Centering makes both side columns equal, so the right side (bell plus the full-name pill, about 280px) decides how wide the nav can be. At 1280–1439px the nav drops to 13px text with tighter gaps, and the bell to 40px.
+- **Long names.** The name's max-width is capped per range at the room that side actually has: 140px, then 150px from 1440, then 220px from 1600. An unusually long name gets an ellipsis (full name in the `title` tooltip) instead of overflowing.
+- **Check fit by measuring the right edge.** Verify with a measurement, not by eye: compare the right group's right edge to the header's content edge at several widths, with a normal and a very long name. A first check that only compared column *starts* missed that the pill was 40px off-screen at 1280.
+- **Tailwind range gotchas.** `xl:hidden` plus `min-[1440px]:block` loses on CSS rule order. Use stacked range variants, and note that `max-[1599px]` means "< 1599px", so it is exclusive.
+
+**Layouts are fluid, full width, with no centered max-width column.** Header, hero, and card rows use `px-6 lg:px-[2.7vw]`, which is the mockup's own side margin (22px of its 820px frame). The user rejected a centered `maxWidth: 1600` column as "compressed in the center" on a 1920 monitor; the mockup uses the whole width.
+
+**Mockups are laptop-frame references (1440px wide), not fixed pixel specs.** The first pass copied the mockup's 1440-scale pixel sizes literally (a 112px header, a fixed 300px photo), and on a 1920×950 monitor it felt oversized. Match the mockup's structure, colors, and proportions, and let the large elements scale with viewport width:
+- Display type and spacing use `clamp()` keyed to the mockup's ratio at 1440. For example, the hero heading is `clamp(28px, 2.57vw, 60px)`, which is 37px at 1440.
+- Images use `aspect-ratio`.
+- The progress ring is `clamp(140px, 11.3vw, 240px)`.
+- Grid ratios change by breakpoint where a fixed ratio squeezes content: the dashboard cards are 3:2 at `lg` and the mockup's 2:1 from `xl`.
+- Body text, nav, and chips stay at fixed readable px sizes.
+
+**Contrast (WCAG 2.2 AA, 4.5:1 for normal text).** Two of this palette's most-used colors fail when used for text:
+- `#a0aec0` on white is only 2.26:1. For text on light backgrounds use `#5f6b7d` (4.93–5.4:1 on white/`#f8fafc`/`#f4f7f6`/`#f1f5f9`). Keep `#a0aec0` for borders and decoration only.
+- White on `#00b06b` is only 2.83:1. For buttons or pills with white text use `#008541` (4.74:1). `#00b06b` is still fine for non-text fills such as progress bars.
+- For green text on light green use `#047857`.
+
+The Dashboard (staff and admin), Layout, Upload, Compliance, Profile, Document Verification, Modules Registry and Notifications screens have been fixed and pass axe-core with 0 violations (staff and admin, 320–1920px). The old PII Index screen, which still used the failing colors, was removed.
+
+**Mockups can describe features the system doesn't have. Never ship those claims as-is.** The Profile mockup showed a consent status, an encryption key ID, a "SHA-256 ledger", and "cryptographically signed" records, none of which exist. Check each security or compliance claim against the backend first. Then keep the layout and state what is true in that spot (see `docs/PROGRESS_REPORT_3.md` Part O). In a health-records app, a false protection claim is worse than a missing feature.
+
+**The navbar is one component for both roles, so every part of it shares one scale, and that scale is the original compact one.** 80px header (72px below `xl`), 40px seal, 13px links (14px from 1440), a 40–44px bell, a 48px profile pill with a 14px name, a 320px notification panel and a 13px logout button. These were briefly enlarged with `clamp()` because the user was browsing at 70% zoom, then set back at their request; **don't scale the navbar up with `vw` again**. If a request says the navbar is "small", check the browser zoom first. There's no per-role styling to copy: fix it for everyone in `Layout.tsx`. **Check admin as well as staff**: admin has five links, not four, so it's the tighter case (it uses tighter link gaps, `gap-2` and `min-[1440px]:gap-4`). Verify fit with a matrix over roles × a short and a long name × widths 1280–2560, and measure every part for both roles instead of trusting one screenshot.
+
+**Frontend and backend deploy separately, so new response fields must have safe defaults.** A new frontend can briefly meet an old backend. Default every newly added field before using it (`raw.followUps ?? []`) so that window shows an empty section instead of a crash.
+
+**Scrolling and `.sr-only`.** `<main>` in `Layout.tsx` is `position: relative` on purpose. Tailwind's `.sr-only` is `position: absolute`, and without a positioned `<main>` those elements escape its overflow clipping and stretch the **document**, which shows up as a second scrollbar beside `<main>`'s own. Don't remove it. **Test scrolling with a real laptop-sized window** (1920×950, 1366×768), **not a tall screenshot window**: a window taller than the page can never show this bug, and it went unnoticed on Profile for a whole feature.
+
+**Text size: admin pages use the staff-page type scale.** Measured at 1440 as a histogram of the computed font size of every text node in `<main>`: most text is 13px (12 to 14 around it), page titles are 22px, buttons are 40 to 44px tall, and the smallest text is 11 to 12px. Health Overview, Document Verification, Modules Registry and Notifications are set to that, and a new page should be measured against a staff page the same way rather than sized by eye. Don't enlarge an admin page on its own: the staff pages are the reference. (They were once enlarged because the user was at 70% browser zoom; see `PROGRESS_REPORT_3.md` Part R.) Hit targets stay comfortable: controls are 40 to 44px tall.
+
+**Inline `display` beats a visibility class on the same element.** `className="xl:hidden"` on an element whose `style` sets `display: grid` never hides it. Put the class on a wrapper and the grid on the child.
+
+**Printing a window.** Portal the modal to `<body>` with the `.print-portal` / `.print-dialog` / `.no-print` / `.print-sheet` classes (see `ModalShell` in `RegistryModals.tsx` and the `@media print` block in `globals.css`). Don't try to print from inside the app shell: it is a fixed-height, overflow-hidden box and would cut the print off at one screen. Test with `page.emulateMedia({ media: 'print' })`.
+
+**Ask about the browser zoom before resizing anything.** An address-bar magnifier icon means the user isn't at 100%. A "this looks small" or "this looks compressed" report (and a login page that looks tiny on a wide monitor) may just be zoom; confirm it with one screenshot of the same page before changing any size.
+
+**Charts (`AdminLanding.tsx` is the reference):**
+- **Validate the palette, don't eyeball it.** Run the `dataviz` skill's `scripts/validate_palette.js` on any series colors. The admin dashboard's cleared / due soon / overdue colors are `#00703f` / `#e36e15` / `#be123c`, the nearest set that passes: the mockup's own green and red failed the chroma and normal-vision-separation checks.
+- **Color is never the only encoding.** Every chart has a labeled legend and names the series in tooltips and readouts, and a chart's data is also available as a screen-reader table.
+- **Hover must work from the keyboard.** Each mark is focusable and shows the same readout on focus. Segments are separated by a 2px white gap, and the top of a stacked bar has a 4px rounded end.
+- **Test hover on the ring, not its center.** Playwright hovers an element's geometric center, which for a donut is the empty middle, so move the mouse to a point on the ring instead.
+
+**Wide tables:** show the table only where every column fits (the staff history table is `hidden lg:block`), and render the same rows as cards below that. Don't let the most important column (Status) end up scrolled out of view.
+
+**Forms:**
+- Link every label to its field with `useId()` plus `htmlFor`/`id`. The Upload form had none linked before Part M. Linked labels also make Playwright's `getByLabel()` work, which doubles as a check that the link is correct.
+- Never ship `outline: none` on a field without a replacement focus style. Use `formInputClass` in `Upload.tsx` (a green `focus-visible` outline) as the reference.
+- A clickable `div` needs `role="button"`, `tabIndex={0}`, and Enter/Space handling, or should simply be a `<button>`.
+
+**Match a mockup with a side-by-side harness, not from memory.** Two rounds of "matching" the staff dashboard were rejected because every check was against a remembered or cropped mockup. What worked: screenshot the real app at the mockup's frame width with the API mocked via Playwright `page.route()` (with the mockup's own sample data), paste it beside the upscaled mockup PNG, and compare region by region. Sample exact colors from the PNG with PIL. Mocking also needs no login/OTP and no DB access. See `docs/PROGRESS_REPORT_3.md` Part K.
 
 - The **mobile-native block** (`className="flex sm:hidden"` or similar) and the **tablet/desktop block** (`hidden sm:flex`) are usually two full sibling JSX blocks per screen — not one block reflowed with breakpoint classes — because mobile mockups in this app often have genuinely different content/composition, not just a resized layout. Shared state/handlers live once at the top of the component; only the JSX differs. Don't duplicate `{children}` from a shared layout wrapper across two breakpoint blocks — that double-mounts whatever's inside it.
 - The **640px–1024px range is the tablet range** — anything gated at `sm` is already "tablet responsive" by construction. When asked to make something "responsive to tablets," audit actual rendering at 640/768/834/900/1024px rather than assuming a missing breakpoint needs to be added.

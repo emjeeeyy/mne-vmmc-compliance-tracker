@@ -4,6 +4,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './audit/audit.module';
+import { AuditTrailModule } from './audit-trail/audit-trail.module';
 import { AuthModule } from './auth/auth.module';
 import { ChangeRequestsModule } from './change-requests/change-requests.module';
 import { ComplianceModule } from './compliance/compliance.module';
@@ -16,6 +17,7 @@ import { HealthModule } from './health/health.module';
 import { MeModule } from './me/me.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { RegistryModule } from './registry/registry.module';
 import { ReportsModule } from './reports/reports.module';
 import { SupabaseModule } from './supabase/supabase.module';
 import { TrackingModule } from './tracking/tracking.module';
@@ -39,6 +41,8 @@ import { TrackingModule } from './tracking/tracking.module';
     DashboardModule,
     ReportsModule,
     TrackingModule,
+    RegistryModule,
+    AuditTrailModule,
     ChangeRequestsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

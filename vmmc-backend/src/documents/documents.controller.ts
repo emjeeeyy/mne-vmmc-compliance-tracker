@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Patch, Post, Headers, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Headers, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -28,9 +28,14 @@ export class DocumentsController {
       type: 'object',
       properties: {
         file: { type: 'string', format: 'binary' },
+        category: { type: 'string', enum: ['APE', 'HEPB_TITER'] },
         examDate: { type: 'string', format: 'date' },
         cxrResult: { type: 'string', enum: ['CLEARED', 'INFILTRATE'] },
         genexpertResult: { type: 'string', enum: ['NOT_DETECTED', 'DETECTED'] },
+        titerResult: { type: 'string', enum: ['REACTIVE', 'NON_REACTIVE'] },
+        title: { type: 'string' },
+        facilityName: { type: 'string' },
+        notes: { type: 'string' },
       },
     },
   })
@@ -42,6 +47,13 @@ export class DocumentsController {
     @Headers('idempotency-key') idempotencyKey?: string,
   ) {
     return this.documentsService.upload(employee, file, dto, idempotencyKey);
+  }
+
+  /** A short-lived link to view an uploaded file. Access follows assertDocumentAccess: the owner, ADMIN, a unit
+   * head for their own department, and TB DOTS / HR staff. */
+  @Get(':id/file-url')
+  getFileUrl(@CurrentUser() currentUser: EmployeeContext, @Param('id') id: string) {
+    return this.documentsService.getFileUrl(currentUser, id);
   }
 
   @Patch(':id/review')

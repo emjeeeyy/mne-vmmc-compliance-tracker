@@ -79,7 +79,8 @@ export function requiresPasswordChange(): boolean {
 }
 
 export function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
+  // Drop trailing credentials ("Maria Santos, RN" -> "Maria Santos") so they don't become the last initial.
+  const parts = name.split(',')[0].trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return ''
   return (parts[0][0] + (parts[parts.length - 1][0] ?? '')).toUpperCase()
 }

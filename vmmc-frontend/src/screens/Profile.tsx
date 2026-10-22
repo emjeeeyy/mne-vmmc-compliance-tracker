@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Settings, Lock, Smartphone, Shield, Activity, Check, User, LogOut, Clock, ChevronRight, ChevronLeft, Eye, X, Info, FileEdit } from 'lucide-react'
+import { Lock, Smartphone, Shield, Activity, Check, User, LogOut, Clock, ChevronRight, ChevronLeft, Eye, X, Info, FileEdit, ShieldCheck, IdCard, RefreshCw, KeyRound, Download, Database, FileText, AlertCircle, UserCheck, Contact } from 'lucide-react'
 import { fadeRise } from '@/lib/motion'
-import { logout, getRole, getInitials } from '@/lib/auth'
+import { logout, getRole, getPreciseRole, getInitials, type PreciseRole } from '@/lib/auth'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
-import { formatBirthDate, calculateAge, formatLogTime } from '@/lib/format'
+import { formatBirthDate, calculateAge, formatLogTime, toCsv } from '@/lib/format'
 
 function apiErrorMessage(err: unknown, fallback: string) {
   if (err instanceof ApiError) return err.message || fallback
@@ -15,17 +15,58 @@ function apiErrorMessage(err: unknown, fallback: string) {
   return fallback
 }
 
-interface ActivityLogEntry { title: string; time: string; ip: string | null }
+interface ActivityLogEntry { title: string; time: string; ip: string | null; action?: string; entityType?: string | null; entityRef?: string | null }
+
+const AUDIT_ROWS_SHOWN = 3
+const ADMIN_TRAIL_STEP = 5
+
+/** One row of the admin's system-wide audit trail (GET /audit-trail). */
+interface AuditTrailEntry {
+  time: string
+  title: string
+  action: string
+  entityType: string | null
+  entityRef: string | null
+  actor: { employeeId: string; fullName: string; role: PreciseRole; jobTitle: string | null } | null
+}
+const AUDIT_COLUMNS: { label: string; width: string; icon: React.ReactNode }[] = [
+  { label: 'Timestamp', width: '20%', icon: <Clock size={15} color="#788ba5" aria-hidden="true" /> },
+  { label: 'User', width: '17%', icon: <UserCheck size={15} color="#788ba5" aria-hidden="true" /> },
+  { label: 'Role', width: '15%', icon: <Contact size={15} color="#788ba5" aria-hidden="true" /> },
+  { label: 'Action', width: '26%', icon: null },
+  { label: 'Resource', width: '22%', icon: <Database size={15} color="#788ba5" aria-hidden="true" /> },
+]
+
+/** "2026-08-20 14:10:02" in local time, matching the mockup's audit-table format. */
+function formatAuditTimestamp(iso: string) {
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+/** ACCESS on "me-documents" -> "ACCESS_ME_DOCUMENTS", the mockup's VERB_OBJECT style. Falls back to the
+ * readable title if an older API response has no raw code. */
+function auditActionCode(log: ActivityLogEntry) {
+  if (!log.action) return log.title
+  return log.entityType ? `${log.action}_${log.entityType.replace(/[^a-z0-9]+/gi, '_').toUpperCase()}` : log.action
+}
+
+function auditResource(log: ActivityLogEntry) {
+  if (!log.entityType) return '—'
+  const type = log.entityType.replace(/[^a-z0-9]+/gi, '_').toUpperCase()
+  return log.entityRef ? `${type} · ${log.entityRef}` : type
+}
+
+const ROLE_LABEL: Record<PreciseRole, string> = { STAFF: 'Staff', UNIT_HEAD: 'Unit Head', ADMIN: 'Administrator' }
+const ROLE_ACCESS: Record<PreciseRole, string> = {
+  STAFF: 'Staff — your own records only',
+  UNIT_HEAD: 'Unit Head — your department’s records',
+  ADMIN: 'Administrator — all records',
+}
 interface LoginHistoryEntry { device: string; ip: string | null; time: string; current: boolean }
 interface DeviceEntry { id: string; name: string; deviceType: string | null; lastActive: string | null; isCurrent: boolean }
 
-const securityRows: { icon: typeof Lock; title: string; desc: string; action: string; view: PrivacyView }[] = [
-  { icon: Lock, title: 'Change PIN', desc: 'Secure your desktop surveillance account with a unique lockpin.', action: 'CHANGE PIN', view: 'pin' },
-  { icon: Smartphone, title: 'Manage Registered Devices', desc: 'View and authenticate devices linked to your VMMC profile.', action: 'CONFIGURE', view: 'devices' },
-  { icon: Shield, title: 'Data Privacy Settings', desc: 'Enforce health registry encryption and adjust data telemetry visibility rules.', action: 'REVIEW SETTINGS', view: 'data' },
-]
-
-type MobileModalKey = 'activity' | 'privacy' | 'account' | 'changeRequests'
+type MobileModalKey = 'activity' | 'privacy' | 'account' | 'changeRequests' | 'password' | '2fa'
 
 type AdminView = 'signature' | 'privacy' | 'changeRequests'
 
@@ -33,14 +74,14 @@ type MenuRow = { icon: typeof Clock; color: string; bg: string; label: string; m
 
 const mobileMenuRows: MenuRow[] = [
   { icon: Clock, color: '#4299e1', bg: '#ebf8ff', label: 'Activity Logs', modalKey: 'activity' },
-  { icon: Shield, color: '#38a169', bg: '#f0fff4', label: 'Privacy & Security', modalKey: 'privacy' },
-  { icon: User, color: '#dd8b3a', bg: '#fffaf0', label: 'Account Security', modalKey: 'account' },
+  { icon: Shield, color: '#047857', bg: '#f0fff4', label: 'Privacy & Security', modalKey: 'privacy' },
+  { icon: User, color: '#92400e', bg: '#fffaf0', label: 'Account Security', modalKey: 'account' },
   { icon: FileEdit, color: '#805ad5', bg: '#faf5ff', label: 'Request a Change', modalKey: 'changeRequests' },
 ]
 
 const adminMenuRows: MenuRow[] = [
   { icon: Clock, color: '#4299e1', bg: '#ebf8ff', label: 'Digital Signature', modalKey: null, view: 'signature' },
-  { icon: Shield, color: '#38a169', bg: '#f0fff4', label: 'Privacy & Security', modalKey: null, view: 'privacy' },
+  { icon: Shield, color: '#047857', bg: '#f0fff4', label: 'Privacy & Security', modalKey: null, view: 'privacy' },
   { icon: FileEdit, color: '#805ad5', bg: '#faf5ff', label: 'Change Requests', modalKey: null, view: 'changeRequests' },
 ]
 
@@ -66,9 +107,9 @@ interface ChangeRequestEntry {
 }
 
 const changeRequestStatusStyle: Record<ChangeRequestEntry['status'], { bg: string; color: string }> = {
-  PENDING: { bg: '#fffbea', color: '#b7791f' },
-  APPROVED: { bg: '#f0fff4', color: '#38a169' },
-  REJECTED: { bg: '#fff5f5', color: '#e53e3e' },
+  PENDING: { bg: '#fffbea', color: '#92400e' },
+  APPROVED: { bg: '#f0fff4', color: '#047857' },
+  REJECTED: { bg: '#fff5f5', color: '#b42318' },
 }
 
 interface PerformanceStats { reviews: number; approvals: number; approvalRate: number }
@@ -106,9 +147,12 @@ function formatRelativeTime(iso: string | null) {
   return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, ${timePart}`
 }
 
-function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+function ToggleSwitch({ checked, onChange, labelledBy }: { checked: boolean; onChange: () => void; labelledBy?: string }) {
   return (
     <button
+      role="switch"
+      aria-checked={checked}
+      aria-labelledby={labelledBy}
       onClick={onChange}
       style={{ width: 42, height: 24, borderRadius: 999, background: checked ? '#008d46' : '#e2e8f0', border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0, transition: 'background 0.2s' }}
     >
@@ -198,8 +242,9 @@ export default function Profile() {
   }, [])
 
   useEffect(() => {
-    api.get<{ fullName: string; email: string; phone: string | null; jobTitle: string | null; employeeId: string; birthDate: string; twoFactorEnabled: boolean }>('/me/profile')
+    api.get<{ fullName: string; email: string; phone: string | null; jobTitle: string | null; employeeId: string; birthDate: string; twoFactorEnabled: boolean; departmentId?: string }>('/me/profile')
       .then((data) => {
+        setDepartmentId(data.departmentId ?? '')
         setDisplayName(data.fullName)
         setEmail(data.email)
         setPhone(data.phone ?? '')
@@ -281,14 +326,14 @@ export default function Profile() {
 
   const adminStats = [
     { label: 'Reviews', value: String(performanceStats.reviews), color: '#1f3151' },
-    { label: 'Approvals', value: String(performanceStats.approvals), color: '#008d46' },
-    { label: 'Approval Rate', value: `${performanceStats.approvalRate}%`, color: '#008d46' },
+    { label: 'Approvals', value: String(performanceStats.approvals), color: '#047857' },
+    { label: 'Approval Rate', value: `${performanceStats.approvalRate}%`, color: '#047857' },
   ]
 
   const adminPrivacyRows: { icon: typeof Clock; color: string; bg: string; label: string; subtitle: string; view: AdminPrivacyView }[] = [
     { icon: Lock, color: '#4299e1', bg: '#ebf8ff', label: 'Change Password', subtitle: passwordChangedLabel, view: 'password' },
-    { icon: Smartphone, color: '#38a169', bg: '#f0fff4', label: 'Two-Factor Authentication', subtitle: twoFactorEnabled ? 'Enabled' : 'Disabled', view: '2fa' },
-    { icon: Clock, color: '#dd8b3a', bg: '#fffaf0', label: 'Login History', subtitle: loginHistoryEntries[0] ? `Last active ${formatRelativeTime(loginHistoryEntries[0].time)}` : 'View recent sign-ins', view: 'history' },
+    { icon: Smartphone, color: '#047857', bg: '#f0fff4', label: 'Two-Factor Authentication', subtitle: twoFactorEnabled ? 'Enabled' : 'Disabled', view: '2fa' },
+    { icon: Clock, color: '#92400e', bg: '#fffaf0', label: 'Login History', subtitle: loginHistoryEntries[0] ? `Last active ${formatRelativeTime(loginHistoryEntries[0].time)}` : 'View recent sign-ins', view: 'history' },
   ]
 
   const [currentPin, setCurrentPin] = useState('')
@@ -305,6 +350,82 @@ export default function Profile() {
   })
 
   const handleLogout = () => { logout(); router.push('/login') }
+
+  const [preciseRole, setPreciseRole] = useState<PreciseRole>('STAFF')
+  const [departmentName, setDepartmentName] = useState('')
+  const [departmentId, setDepartmentId] = useState('')
+  const [auditTrail, setAuditTrail] = useState<AuditTrailEntry[] | null>(null)
+  const [auditTrailError, setAuditTrailError] = useState('')
+  const [trailShown, setTrailShown] = useState(ADMIN_TRAIL_STEP)
+  const [syncing, setSyncing] = useState(false)
+  const [syncedAt, setSyncedAt] = useState<number | null>(null)
+  useEffect(() => { setPreciseRole(getPreciseRole() ?? 'STAFF') }, [])
+  useEffect(() => {
+    if (role !== 'admin') return
+    // Admins see the whole system's recorded actions here (staff only ever see their own).
+    api.get<AuditTrailEntry[]>('/audit-trail?limit=25')
+      .then(rows => setAuditTrail(rows ?? []))
+      .catch(err => { setAuditTrail([]); setAuditTrailError(apiErrorMessage(err, 'Could not load the audit trail.')) })
+  }, [role])
+  useEffect(() => {
+    // The overview that gives staff their department name has a different shape for admins, so resolve it from the list.
+    if (role !== 'admin' || !departmentId) return
+    api.get<{ id: string; name: string }[]>('/departments').then(list => setDepartmentName(list.find(d => d.id === departmentId)?.name ?? '')).catch(() => {})
+  }, [role, departmentId])
+  useEffect(() => {
+    if (role !== 'staff') return
+    // Same overview endpoint Upload uses for the department's display name; /me/profile only carries its id.
+    api.get<{ department?: { name: string } }>('/dashboard/overview').then(d => setDepartmentName(d.department?.name ?? '')).catch(() => {})
+  }, [role])
+  const roleLabel = ROLE_LABEL[preciseRole]
+  const roleAccessLabel = ROLE_ACCESS[preciseRole]
+
+  /** "Sync Profile": re-reads profile, activity, and sign-in history from the server. */
+  const syncProfile = async () => {
+    setSyncing(true)
+    try {
+      const [profile, logs, logins] = await Promise.all([
+        api.get<{ fullName: string; email: string; phone: string | null; jobTitle: string | null; employeeId: string; birthDate: string; twoFactorEnabled: boolean }>('/me/profile'),
+        api.get<ActivityLogEntry[]>('/me/activity-logs'),
+        api.get<LoginHistoryEntry[]>('/me/login-history'),
+      ])
+      setDisplayName(profile.fullName)
+      setEmail(profile.email)
+      setPhone(profile.phone ?? '')
+      setJobTitle(profile.jobTitle ?? '')
+      setEmployeeId(profile.employeeId)
+      setBirthDate(profile.birthDate)
+      setTwoFactorEnabled(profile.twoFactorEnabled)
+      setActivityLogs(logs)
+      setLoginHistoryEntries(logins)
+      setSyncedAt(Date.now())
+      setTimeout(() => setSyncedAt(null), 2500)
+    } catch {
+      // keep the current values; the button simply returns to "Sync Profile"
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  /** "Download Data Log": the signed-in person's own audit entries as CSV. */
+  const downloadDataLog = () => {
+    const rows = activityLogs.map(log => ({
+      timestamp: formatAuditTimestamp(log.time),
+      user: employeeId,
+      role: roleLabel,
+      action: auditActionCode(log),
+      resource: auditResource(log),
+      description: log.title,
+      ip_address: log.ip ?? '',
+    }))
+    const blob = new Blob([toCsv(rows)], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${employeeId || 'my'}-data-log.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const handleSave = async () => {
     setSaveError('')
@@ -514,7 +635,7 @@ export default function Profile() {
                 <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginBottom: 16 }}>
                   {drawMode ? (
                     <>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, textAlign: 'center' }}>Draw your signature below</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 10, textAlign: 'center' }}>Draw your signature below</div>
                       <canvas
                         ref={canvasRef}
                         width={300}
@@ -543,7 +664,7 @@ export default function Profile() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={signatureImage} alt="Saved signature" style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }} />
                         ) : (
-                          <span style={{ fontSize: 13, color: '#a0aec0', fontStyle: 'italic' }}>No signature saved</span>
+                          <span style={{ fontSize: 13, color: '#5f6b7d', fontStyle: 'italic' }}>No signature saved</span>
                         )}
                       </div>
                       {signatureError && (
@@ -555,7 +676,7 @@ export default function Profile() {
                         <input ref={signatureFileRef} type="file" accept="image/png" style={{ display: 'none' }} onChange={handleSignatureFile} />
                       </div>
                       {signatureImage && (
-                        <button onClick={deleteSignature} disabled={signatureSaving} style={{ width: '100%', padding: '13px 0', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Delete Signature</button>
+                        <button onClick={deleteSignature} disabled={signatureSaving} style={{ width: '100%', padding: '13px 0', minHeight: 44, background: '#fff5f5', color: '#b42318', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Delete Signature</button>
                       )}
                     </>
                   )}
@@ -563,7 +684,7 @@ export default function Profile() {
 
                 <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', gap: 10, background: '#fffaf0', border: '1px solid #feebc8', borderRadius: 14, padding: 14 }}>
                   <Info size={16} color="#dd8b3a" strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#b7791f', lineHeight: 1.5, textTransform: 'uppercase', letterSpacing: '0.01em' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#92400e', lineHeight: 1.5, textTransform: 'uppercase', letterSpacing: '0.01em' }}>
                     Your signature will be applied automatically to all approved medical clearance
                   </span>
                 </motion.div>
@@ -587,7 +708,7 @@ export default function Profile() {
                     </div>
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151' }}>{row.label}</div>
-                      <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{row.subtitle}</div>
+                      <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>{row.subtitle}</div>
                     </div>
                     <ChevronRight size={18} color="#cbd5e0" />
                   </motion.button>
@@ -597,7 +718,7 @@ export default function Profile() {
 
             {adminView === 'privacy' && adminPrivacyView === 'password' && (
               <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                <p style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.6, marginBottom: 20 }}>
+                <p style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 20 }}>
                   Update the password used to sign in to your Admin account.
                 </p>
                 {[
@@ -606,7 +727,7 @@ export default function Profile() {
                   { label: 'Confirm New Password', value: confirmPassword, onChange: setConfirmPassword },
                 ].map(f => (
                   <div key={f.label} style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>{f.label}</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>{f.label}</label>
                     <input
                       type="password"
                       value={f.value}
@@ -628,7 +749,7 @@ export default function Profile() {
                 )}
                 <button
                   onClick={() => handleUpdatePassword()}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008541', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                 >
                   <AnimatePresence mode="wait">
                     {pwSaved
@@ -645,7 +766,7 @@ export default function Profile() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', marginBottom: 4 }}>Enable Two-Factor Authentication</div>
-                    <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.5 }}>Require a one-time verification code in addition to your password when signing in.</div>
+                    <div style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.5 }}>Require a one-time verification code in addition to your password when signing in.</div>
                   </div>
                   <ToggleSwitch checked={twoFactorEnabled} onChange={toggleTwoFactor} />
                 </div>
@@ -662,7 +783,7 @@ export default function Profile() {
 
             {adminView === 'privacy' && adminPrivacyView === 'history' && (
               <div>
-                <p style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.6, marginBottom: 16 }}>
+                <p style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 16 }}>
                   Recent sign-ins to your Admin account.
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -673,15 +794,15 @@ export default function Profile() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 12, fontWeight: 700, color: '#1f3151' }}>{entry.device}</div>
-                        <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{entry.ip ?? 'Unknown IP'} • {formatRelativeTime(entry.time)}</div>
+                        <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>{entry.ip ?? 'Unknown IP'} • {formatRelativeTime(entry.time)}</div>
                       </div>
                       {entry.current && (
-                        <span style={{ fontSize: 12, fontWeight: 800, color: '#008d46', background: '#e6f9ee', borderRadius: 999, padding: '4px 8px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Current</span>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: '#047857', background: '#e6f9ee', borderRadius: 999, padding: '4px 8px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Current</span>
                       )}
                     </div>
                   ))}
                   {loginHistoryEntries.length === 0 && (
-                    <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 12, padding: '20px 0' }}>No sign-ins recorded yet.</div>
+                    <div style={{ textAlign: 'center', color: '#5f6b7d', fontSize: 12, padding: '20px 0' }}>No sign-ins recorded yet.</div>
                   )}
                 </div>
               </div>
@@ -689,11 +810,11 @@ export default function Profile() {
 
             {adminView === 'changeRequests' && (
               <div>
-                <p style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.6, marginBottom: 16 }}>
+                <p style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 16 }}>
                   Staff-submitted requests to change a field that isn't self-service editable.
                 </p>
                 {pendingChangeRequests.length === 0 && (
-                  <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 12, padding: '20px 0' }}>No pending requests.</div>
+                  <div style={{ textAlign: 'center', color: '#5f6b7d', fontSize: 12, padding: '20px 0' }}>No pending requests.</div>
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {pendingChangeRequests.map(cr => {
@@ -702,21 +823,21 @@ export default function Profile() {
                     return (
                       <div key={cr.id} style={{ background: '#fff', borderRadius: 16, padding: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                         <div style={{ fontSize: 13, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', marginBottom: 2 }}>{cr.employee?.fullName}</div>
-                        <div style={{ fontSize: 12, color: '#a0aec0', marginBottom: 8 }}>{cr.employee?.employeeId} • {fieldLabel}</div>
+                        <div style={{ fontSize: 12, color: '#5f6b7d', marginBottom: 8 }}>{cr.employee?.employeeId} • {fieldLabel}</div>
                         <div style={{ fontSize: 12, color: '#1f3151', marginBottom: 4 }}>{cr.currentValue ?? '—'} → <strong>{cr.requestedValue}</strong></div>
-                        <div style={{ fontSize: 12, color: '#718096', marginBottom: 12 }}>&ldquo;{cr.reason}&rdquo;</div>
+                        <div style={{ fontSize: 12, color: '#5f6b7d', marginBottom: 12 }}>&ldquo;{cr.reason}&rdquo;</div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button
                             onClick={() => handleRejectChangeRequest(cr.id)}
                             disabled={reviewing}
-                            style={{ flex: 1, padding: '10px 0', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
+                            style={{ flex: 1, padding: '10px 0', minHeight: 44, background: '#fff5f5', color: '#b42318', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
                           >
                             Reject
                           </button>
                           <button
                             onClick={() => handleApproveChangeRequest(cr.id)}
                             disabled={reviewing}
-                            style={{ flex: 1, padding: '10px 0', minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
+                            style={{ flex: 1, padding: '10px 0', minHeight: 44, background: '#008541', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
                           >
                             {reviewing ? 'Saving…' : 'Approve'}
                           </button>
@@ -737,13 +858,13 @@ export default function Profile() {
           {role === 'admin' ? (
             <>
               <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', marginBottom: 4, textAlign: 'center' }}>{displayName}</div>
-              <div style={{ fontSize: 12, color: '#718096', fontWeight: 600, marginBottom: 20, textAlign: 'center' }}>{jobTitle}</div>
+              <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 600, marginBottom: 20, textAlign: 'center' }}>{jobTitle}</div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', width: '100%', gap: 8, marginBottom: 20 }}>
                 {adminStats.map(s => (
                   <div key={s.label} style={{ textAlign: 'center' }}>
                     <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 18, fontWeight: 800, color: s.color, marginBottom: 4 }}>{s.value}</div>
-                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+                    <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
                   </div>
                 ))}
               </div>
@@ -751,12 +872,12 @@ export default function Profile() {
           ) : (
             <>
               <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', marginBottom: 8 }}>{displayName}</div>
-              <span style={{ background: '#e6f9ee', color: '#008d46', borderRadius: 999, padding: '5px 14px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 20 }}>{jobTitle}</span>
+              <span style={{ background: '#e6f9ee', color: '#047857', borderRadius: 999, padding: '5px 14px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 20 }}>{jobTitle}</span>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', width: '100%', gap: 8, marginBottom: 20 }}>
                 {[{ label: 'Birthday', value: formatBirthDate(birthDate) }, { label: 'Age', value: calculateAge(birthDate) }, { label: 'Staff ID', value: employeeId }].map(f => (
                   <div key={f.label} style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{f.label}</div>
+                    <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{f.label}</div>
                     <div style={{ fontSize: 12, fontWeight: 800, color: '#1f3151' }}>{f.value}</div>
                   </div>
                 ))}
@@ -766,14 +887,14 @@ export default function Profile() {
 
           <button
             onClick={handleLogout}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 0', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px 0', minHeight: 44, background: '#fff5f5', color: '#b42318', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}
           >
             <LogOut size={14} strokeWidth={2.5} /> Logout From Session
           </button>
         </motion.div>
 
         {role === 'admin' && (
-          <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 }}>Management</div>
+          <div style={{ fontSize: 12, fontWeight: 800, color: '#5f6b7d', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, marginLeft: 4 }}>Management</div>
         )}
 
         {(role === 'admin' ? adminMenuRows : mobileMenuRows).map((row, i) => (
@@ -800,8 +921,7 @@ export default function Profile() {
 
       {/* Tablet / desktop profile */}
       <div className="hidden sm:block">
-        {role === 'admin' ? (
-          adminView ? (
+        {role === 'admin' && adminView ? (
             <>
               <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 24 }}>
                 <button
@@ -820,9 +940,9 @@ export default function Profile() {
                       <div style={{ width: 84, height: 84, borderRadius: '50%', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 28, color: '#1f3151', border: '5px solid #fff', marginBottom: 16 }}>{getInitials(displayName)}</div>
                       <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 20, color: '#1f3151', textAlign: 'center' }}>{displayName}</div>
                       <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#2b6cb0', margin: '6px 0 8px', textAlign: 'center' }}>{jobTitle}</div>
-                      <div style={{ fontSize: 13, color: '#a0aec0', textAlign: 'center', marginBottom: 32 }}>{employeeId}</div>
+                      <div style={{ fontSize: 13, color: '#5f6b7d', textAlign: 'center', marginBottom: 32 }}>{employeeId}</div>
                       <motion.button onClick={handleLogout} whileHover={{ filter: 'brightness(0.95)', y: -1 }} whileTap={{ scale: 0.98 }}
-                        style={{ width: '100%', padding: '14px 0', background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer' }}
+                        style={{ width: '100%', padding: '14px 0', background: '#fff5f5', color: '#b42318', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer' }}
                       >LOGOUT FROM SESSION</motion.button>
                     </div>
                   </motion.div>
@@ -833,13 +953,13 @@ export default function Profile() {
                         <Activity size={20} color="#2b6cb0" />
                         <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>PERFORMANCE<br/>OVERVIEW</span>
                       </div>
-                      <span style={{ color: '#a0aec0', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>ALL<br/>TIME</span>
+                      <span style={{ color: '#5f6b7d', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>ALL<br/>TIME</span>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                       {adminStats.map(s => (
                         <div key={s.label} style={{ textAlign: 'center' }}>
                           <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: s.color, marginBottom: 4 }}>{s.value}</div>
-                          <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+                          <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
                         </div>
                       ))}
                     </div>
@@ -856,7 +976,7 @@ export default function Profile() {
                   <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: 32, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', marginBottom: 24 }}>
                     {drawMode ? (
                       <>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 14, textAlign: 'center' }}>Draw your signature below</div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 14, textAlign: 'center' }}>Draw your signature below</div>
                         <canvas
                           ref={canvasRef}
                           width={480}
@@ -885,7 +1005,7 @@ export default function Profile() {
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={signatureImage} alt="Saved signature" style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }} />
                           ) : (
-                            <span style={{ fontSize: 13, color: '#a0aec0', fontStyle: 'italic' }}>No signature saved</span>
+                            <span style={{ fontSize: 13, color: '#5f6b7d', fontStyle: 'italic' }}>No signature saved</span>
                           )}
                         </div>
                         {signatureError && (
@@ -898,7 +1018,7 @@ export default function Profile() {
                         </div>
                         {signatureImage && (
                           <div style={{ maxWidth: 320, margin: '0 auto' }}>
-                            <button onClick={deleteSignature} disabled={signatureSaving} style={{ width: '100%', padding: '13px 0', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Delete Signature</button>
+                            <button onClick={deleteSignature} disabled={signatureSaving} style={{ width: '100%', padding: '13px 0', minHeight: 44, background: '#fff5f5', color: '#b42318', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer' }}>Delete Signature</button>
                           </div>
                         )}
                       </>
@@ -907,7 +1027,7 @@ export default function Profile() {
 
                   <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', gap: 12, background: '#fffaf0', border: '1px solid #feebc8', borderRadius: 16, padding: 18 }}>
                     <Info size={18} color="#dd8b3a" strokeWidth={2} style={{ flexShrink: 0, marginTop: 1 }} />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#b7791f', lineHeight: 1.6, textTransform: 'uppercase', letterSpacing: '0.01em' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#92400e', lineHeight: 1.6, textTransform: 'uppercase', letterSpacing: '0.01em' }}>
                       Your signature will be applied automatically to all approved medical clearance
                     </span>
                   </motion.div>
@@ -920,7 +1040,7 @@ export default function Profile() {
                     <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>
                       {adminPrivacyView === 'list' ? 'Privacy & Security' : adminPrivacyRows.find(r => r.view === adminPrivacyView)?.label}
                     </h1>
-                    {adminPrivacyView === 'list' && <p style={{ fontSize: 13, color: '#718096', margin: 0 }}>Manage sign-in credentials, verification, and session history for your Admin account.</p>}
+                    {adminPrivacyView === 'list' && <p style={{ fontSize: 13, color: '#5f6b7d', margin: 0 }}>Manage sign-in credentials, verification, and session history for your Admin account.</p>}
                   </motion.div>
 
                   {adminPrivacyView === 'list' && (
@@ -937,7 +1057,7 @@ export default function Profile() {
                           </div>
                           <div style={{ flex: 1 }}>
                             <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>{row.label}</div>
-                            <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.5 }}>{row.subtitle}</div>
+                            <div style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.5 }}>{row.subtitle}</div>
                           </div>
                           <ChevronRight size={18} color="#cbd5e0" style={{ flexShrink: 0 }} />
                         </button>
@@ -947,7 +1067,7 @@ export default function Profile() {
 
                   {adminPrivacyView === 'password' && (
                     <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: 32, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                      <p style={{ fontSize: 13, color: '#a0aec0', lineHeight: 1.6, marginBottom: 24 }}>
+                      <p style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 24 }}>
                         Update the password used to sign in to your Admin account.
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5" style={{ marginBottom: 20 }}>
@@ -956,13 +1076,13 @@ export default function Profile() {
                           { label: 'New Password', value: newPassword, onChange: setNewPassword },
                         ].map(f => (
                           <div key={f.label}>
-                            <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>{f.label}</label>
+                            <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 8 }}>{f.label}</label>
                             <input type="password" value={f.value} onChange={e => f.onChange(e.target.value)} placeholder="••••••••" style={inputStyle} onFocus={focusInput} onBlur={blurInput} />
                           </div>
                         ))}
                       </div>
                       <div style={{ marginBottom: 24, maxWidth: 320 }}>
-                        <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>Confirm New Password</label>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 8 }}>Confirm New Password</label>
                         <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="••••••••" style={inputStyle} onFocus={focusInput} onBlur={blurInput} />
                       </div>
                       {pwAttempted && pwErrorMessage && (
@@ -977,7 +1097,7 @@ export default function Profile() {
                       )}
                       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                         <motion.button onClick={() => handleUpdatePassword(() => { setAdminView(null); setAdminPrivacyView('list') })} whileHover={{ filter: 'brightness(1.1)', y: -1 }} whileTap={{ scale: 0.97 }}
-                          style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', minHeight: 44, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', minWidth: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                          style={{ background: '#008541', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', minHeight: 44, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', minWidth: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                         >
                           <AnimatePresence mode="wait">
                             {pwSaved
@@ -995,7 +1115,7 @@ export default function Profile() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>Enable Two-Factor Authentication</div>
-                          <div style={{ fontSize: 13, color: '#a0aec0', lineHeight: 1.6 }}>Require a one-time verification code in addition to your password when signing in.</div>
+                          <div style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.6 }}>Require a one-time verification code in addition to your password when signing in.</div>
                         </div>
                         <ToggleSwitch checked={twoFactorEnabled} onChange={toggleTwoFactor} />
                       </div>
@@ -1012,7 +1132,7 @@ export default function Profile() {
 
                   {adminPrivacyView === 'history' && (
                     <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: 32, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                      <p style={{ fontSize: 13, color: '#a0aec0', lineHeight: 1.6, marginBottom: 20 }}>
+                      <p style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 20 }}>
                         Recent sign-ins to your Admin account.
                       </p>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1023,15 +1143,15 @@ export default function Profile() {
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151' }}>{entry.device}</div>
-                              <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{entry.ip ?? 'Unknown IP'} • {formatRelativeTime(entry.time)}</div>
+                              <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>{entry.ip ?? 'Unknown IP'} • {formatRelativeTime(entry.time)}</div>
                             </div>
                             {entry.current && (
-                              <span style={{ fontSize: 12, fontWeight: 800, color: '#008d46', background: '#e6f9ee', borderRadius: 999, padding: '5px 10px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Current</span>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: '#047857', background: '#e6f9ee', borderRadius: 999, padding: '5px 10px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>Current</span>
                             )}
                           </div>
                         ))}
                         {loginHistoryEntries.length === 0 && (
-                          <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 12, padding: '20px 0' }}>No sign-ins recorded yet.</div>
+                          <div style={{ textAlign: 'center', color: '#5f6b7d', fontSize: 12, padding: '20px 0' }}>No sign-ins recorded yet.</div>
                         )}
                       </div>
                     </motion.div>
@@ -1043,12 +1163,12 @@ export default function Profile() {
                 <>
                   <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 24 }}>
                     <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>Change Requests</h1>
-                    <p style={{ fontSize: 13, color: '#718096', margin: 0 }}>Staff-submitted requests to change a field that isn&apos;t self-service editable.</p>
+                    <p style={{ fontSize: 13, color: '#5f6b7d', margin: 0 }}>Staff-submitted requests to change a field that isn&apos;t self-service editable.</p>
                   </motion.div>
 
                   <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: 32, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
                     {pendingChangeRequests.length === 0 && (
-                      <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 14, padding: '40px 0' }}>No pending requests.</div>
+                      <div style={{ textAlign: 'center', color: '#5f6b7d', fontSize: 14, padding: '40px 0' }}>No pending requests.</div>
                     )}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       {pendingChangeRequests.map(cr => {
@@ -1058,22 +1178,22 @@ export default function Profile() {
                           <div key={cr.id} style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 16, background: '#f8fafc' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', marginBottom: 4 }}>{cr.employee?.fullName}</div>
-                              <div style={{ fontSize: 12, color: '#a0aec0', marginBottom: 8 }}>{cr.employee?.employeeId} • {fieldLabel}</div>
+                              <div style={{ fontSize: 12, color: '#5f6b7d', marginBottom: 8 }}>{cr.employee?.employeeId} • {fieldLabel}</div>
                               <div style={{ fontSize: 13, color: '#1f3151', marginBottom: 4 }}>{cr.currentValue ?? '—'} → <strong>{cr.requestedValue}</strong></div>
-                              <div style={{ fontSize: 12, color: '#718096' }}>&ldquo;{cr.reason}&rdquo;</div>
+                              <div style={{ fontSize: 12, color: '#5f6b7d' }}>&ldquo;{cr.reason}&rdquo;</div>
                             </div>
                             <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
                               <button
                                 onClick={() => handleRejectChangeRequest(cr.id)}
                                 disabled={reviewing}
-                                style={{ padding: '10px 20px', minHeight: 44, background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
+                                style={{ padding: '10px 20px', minHeight: 44, background: '#fff5f5', color: '#b42318', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
                               >
                                 Reject
                               </button>
                               <button
                                 onClick={() => handleApproveChangeRequest(cr.id)}
                                 disabled={reviewing}
-                                style={{ padding: '10px 20px', minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
+                                style={{ padding: '10px 20px', minHeight: 44, background: '#008541', color: '#fff', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', cursor: reviewing ? 'default' : 'pointer', opacity: reviewing ? 0.6 : 1 }}
                               >
                                 {reviewing ? 'Saving…' : 'Approve'}
                               </button>
@@ -1088,251 +1208,279 @@ export default function Profile() {
                 </div>
               </div>
             </>
-          ) : (
-            <>
-              <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 32 }}>
-                <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>Admin Profile &amp; Security</h1>
-                <p style={{ fontSize: 14, color: '#718096', marginBottom: 0 }}>Manage your credentials, digital signature, and account security as Medical Director.</p>
-              </motion.div>
-
-              <div className="flex flex-col lg:flex-row gap-6" style={{ alignItems: 'flex-start' }}>
-                <div className="w-full lg:w-[340px] lg:flex-shrink-0 flex flex-col gap-6">
-                  <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ height: 100, background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)' }} />
-                    <div style={{ padding: '0 24px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: -42 }}>
-                      <div style={{ width: 84, height: 84, borderRadius: '50%', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 28, color: '#1f3151', border: '5px solid #fff', marginBottom: 16 }}>{getInitials(displayName)}</div>
-                      <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 20, color: '#1f3151', textAlign: 'center' }}>{displayName}</div>
-                      <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#2b6cb0', margin: '6px 0 8px', textAlign: 'center' }}>{jobTitle}</div>
-                      <div style={{ fontSize: 13, color: '#a0aec0', textAlign: 'center', marginBottom: 32 }}>{employeeId}</div>
-                      <motion.button onClick={handleLogout} whileHover={{ filter: 'brightness(0.95)', y: -1 }} whileTap={{ scale: 0.98 }}
-                        style={{ width: '100%', padding: '14px 0', background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer' }}
-                      >LOGOUT FROM SESSION</motion.button>
-                    </div>
-                  </motion.div>
-
-                  <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px 28px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Activity size={20} color="#2b6cb0" />
-                        <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>PERFORMANCE<br/>OVERVIEW</span>
-                      </div>
-                      <span style={{ color: '#a0aec0', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>ALL<br/>TIME</span>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                      {adminStats.map(s => (
-                        <div key={s.label} style={{ textAlign: 'center' }}>
-                          <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: s.color, marginBottom: 4 }}>{s.value}</div>
-                          <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                </div>
-
-                <div className="w-full lg:flex-1 flex flex-col gap-6">
-                  <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                      <Clock size={18} color="#4299e1" />
-                      <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>DIGITAL SIGNATURE</span>
-                    </div>
-                    <div className="flex flex-col xl:flex-row items-center gap-6">
-                      <div style={{ background: '#f1f5f9', borderRadius: 16, width: '100%', maxWidth: 220, height: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-                        {signatureImage ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={signatureImage} alt="Saved signature" style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }} />
-                        ) : (
-                          <span style={{ fontSize: 12, color: '#a0aec0', fontStyle: 'italic' }}>No signature saved</span>
-                        )}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, color: '#718096', lineHeight: 1.6, marginBottom: 16 }}>Applied automatically to all approved medical clearances.</div>
-                        <motion.button onClick={() => setAdminView('signature')} whileHover={{ filter: 'brightness(1.1)', y: -1 }} whileTap={{ scale: 0.97 }}
-                          style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer' }}
-                        >
-                          Manage Signature
-                        </motion.button>
-                      </div>
-                    </div>
-                  </motion.div>
-
-                  <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-                      <Shield size={18} color="#38a169" />
-                      <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>PRIVACY &amp; SECURITY</span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      {adminPrivacyRows.map((row, i) => (
-                        <button
-                          key={row.label}
-                          onClick={() => { setAdminView('privacy'); setAdminPrivacyView(row.view) }}
-                          className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5"
-                          style={{ width: '100%', padding: '20px 0', background: 'none', border: 'none', borderTop: i > 0 ? '1px solid #e2e8f0' : 'none', cursor: 'pointer', textAlign: 'left' }}
-                        >
-                          <div style={{ width: 44, height: 44, borderRadius: 12, background: row.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <row.icon size={20} color={row.color} strokeWidth={1.5} />
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>{row.label}</div>
-                            <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.5 }}>{row.subtitle}</div>
-                          </div>
-                          <ChevronRight size={18} color="#cbd5e0" style={{ flexShrink: 0 }} />
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-
-                  <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                      <FileEdit size={18} color="#805ad5" />
-                      <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>CHANGE REQUESTS</span>
-                      {pendingChangeRequests.length > 0 && (
-                        <span style={{ background: '#fffbea', color: '#b7791f', borderRadius: 999, padding: '2px 10px', fontSize: 12, fontWeight: 800 }}>{pendingChangeRequests.length} pending</span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 13, color: '#718096', lineHeight: 1.6, marginBottom: 16 }}>Staff-submitted requests to change a field that isn&apos;t self-service editable.</div>
-                    <motion.button onClick={() => setAdminView('changeRequests')} whileHover={{ filter: 'brightness(1.1)', y: -1 }} whileTap={{ scale: 0.97 }}
-                      style={{ background: '#805ad5', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer' }}
-                    >
-                      Review Requests
-                    </motion.button>
-                  </motion.div>
-                </div>
-              </div>
-            </>
-          )
         ) : (
-        <>
-        <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 32 }}>
-          <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>Profile & Security</h1>
-          <p style={{ fontSize: 14, color: '#718096', marginBottom: 0 }}>Manage personal details, inspect surveillance audits, review login sessions, and edit security constraints.</p>
-        </motion.div>
+        <div className="sm:-mx-6 sm:-mt-6 lg:-mx-12 lg:-mt-12 sm:px-6 lg:px-[4vw]" style={{ paddingTop: 'clamp(0px, 2.3vw, 44px)', fontFamily: 'Poppins,sans-serif' }}>
+          {/* Layout from the Profile mockup (4vw margins, 1.8fr/1fr profile + security row). Where the mockup
+              names protections the system doesn't have (consent tracking, an encryption key ID, a SHA-256
+              ledger, cryptographic signing), the same spot states what is actually true instead. */}
+          <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible"
+            style={{ background: '#fff', borderRadius: 18, padding: '26px 30px', boxShadow: '0 4px 8px rgba(15,23,42,0.2)' }}
+          >
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 28, padding: '0 16px 0 12px', borderRadius: 999, background: '#f5e4ff', color: '#59197a', fontSize: 12, fontWeight: 600 }}>
+              <ShieldCheck size={14} strokeWidth={2.4} aria-hidden="true" /> Profile &amp; Privacy Governance
+            </span>
+            <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', lineHeight: 1.3, margin: '16px 0 0' }}>User Account Profile &amp; Data Protection</h1>
+            <p style={{ fontSize: 13, color: '#5e6d85', lineHeight: 1.5, margin: '4px 0 0' }}>{role === 'admin' ? 'Manage your profile identity, role-based access, sign-in security, and review the system’s RA 10173 data-privacy audit trail.' : 'Manage your profile identity, role-based access, sign-in security, and review your RA 10173 data-privacy audit trail.'}</p>
+          </motion.div>
 
-        <div className="flex flex-col lg:flex-row gap-6" style={{ alignItems: 'flex-start' }}>
-          <div className="w-full lg:w-[340px] lg:flex-shrink-0 flex flex-col gap-6">
-            <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, overflow: 'hidden', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ height: 100, background: 'linear-gradient(135deg, #093c2b 0%, #008d46 100%)' }} />
-              <div style={{ padding: '0 24px 32px', display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: -42 }}>
-                <div style={{ width: 84, height: 84, borderRadius: '50%', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 28, color: '#1f3151', border: '5px solid #fff', marginBottom: 16 }}>{getInitials(displayName)}</div>
-                <div style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 20, color: '#1f3151', textAlign: 'center' }}>{displayName}</div>
-                <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#008d46', margin: '6px 0 8px' }}>{jobTitle}</div>
-                <div style={{ fontSize: 13, color: '#a0aec0', textAlign: 'center', marginBottom: 32 }}>{employeeId}</div>
-                <motion.button onClick={handleLogout} whileHover={{ filter: 'brightness(0.95)', y: -1 }} whileTap={{ scale: 0.98 }}
-                  style={{ width: '100%', padding: '14px 0', background: '#fff5f5', color: '#e53e3e', border: 'none', borderRadius: 999, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer' }}
-                >LOGOUT FROM SESSION</motion.button>
-              </div>
-            </motion.div>
-
-            <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px 28px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Activity size={20} color="#008d46" />
-                  <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>ACTIVITY<br/>LOGS</span>
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)] gap-6" style={{ marginTop: 24 }}>
+            {/* Profile card */}
+            <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, border: '1px solid #e5e9f0', padding: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 18 }}>
+                <div style={{ width: 70, height: 70, borderRadius: 12, background: '#e6f4ea', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700, color: '#004b2b', flexShrink: 0 }}>{getInitials(displayName)}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: '#111827', lineHeight: 1.3 }}>{displayName || '—'}</div>
+                  <div style={{ fontSize: 13, color: '#5f6b7d', marginTop: 2 }}>{[jobTitle, departmentName].filter(Boolean).join(' • ') || '—'}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#5f6b7d', marginTop: 4 }}>
+                    <IdCard size={14} aria-hidden="true" /> ID: {employeeId || '—'}
+                  </div>
                 </div>
-                <span style={{ color: '#a0aec0', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', textAlign: 'right', lineHeight: 1.3 }}>INTERACTIVE<br/>LOG</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {activityLogs.slice(0, 5).map((log, i) => (
-                  <motion.div key={i} custom={i + 3} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', gap: 12 }}>
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#008d46', flexShrink: 0, marginTop: 6 }} />
-                    <div>
-                      <div style={{ fontFamily: 'Public Sans,sans-serif', fontSize: 14, fontWeight: 700, color: '#1f3151', marginBottom: 4, lineHeight: 1.3 }}>{log.title}</div>
-                      <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.5 }}>{formatLogTime(log.time)} · IP:<br/>{log.ip ?? 'Unknown'}</div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-              {activityLogs.length > 5 && (
-                <motion.button
-                  onClick={() => setActiveModal('activity')}
-                  whileHover={{ x: 2 }}
-                  style={{ width: '100%', background: 'none', border: 'none', borderTop: '1px solid #e2e8f0', marginTop: 20, paddingTop: 16, cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                <button onClick={syncProfile} disabled={syncing}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 40, padding: '0 16px', background: '#f7f9fc', border: '1px solid #e2e8f0', borderRadius: 8, color: '#374151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: syncing ? 'default' : 'pointer', flexShrink: 0 }}
                 >
-                  View All {activityLogs.length} →
-                </motion.button>
-              )}
-            </motion.div>
-          </div>
-
-          <div className="w-full lg:flex-1 flex flex-col gap-6">
-            <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-                <Settings size={18} color="#008d46" />
-                <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>ACCOUNT SETTINGS</span>
+                  <RefreshCw size={15} aria-hidden="true" style={{ transition: 'transform 0.6s', transform: syncing ? 'rotate(360deg)' : 'none' }} />
+                  {syncing ? 'Syncing…' : syncedAt ? 'Synced' : 'Sync Profile'}
+                </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5" style={{ marginBottom: 20 }}>
-                {[{ label: 'DISPLAY NAME', value: displayName, onChange: setDisplayName }, { label: 'EMAIL ADDRESS', value: email, onChange: setEmail }].map(f => (
-                  <div key={f.label}>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>{f.label}</label>
-                    <input value={f.value} onChange={e => f.onChange(e.target.value)} style={inputStyle} onFocus={focusInput} onBlur={blurInput} />
+
+              <div style={{ height: 1, background: '#eef1f5', margin: '20px 0' }} />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  { label: 'Department / Unit Assignment', value: departmentName || '—' },
+                  { label: 'Official Email Address', value: email || '—' },
+                  { label: 'Contact Number', value: phone || 'Not set' },
+                  { label: 'APE Schedule', value: birthDate ? `Birth month · ${new Date(birthDate).toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' })}` : '—' },
+                ].map(tile => (
+                  <div key={tile.label} style={{ background: '#f7f9fc', border: '1px solid #e5e9f0', borderRadius: 12, padding: '14px 16px', minWidth: 0 }}>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{tile.label}</div>
+                    <div title={tile.value} style={{ fontSize: 15, fontWeight: 700, color: '#111827', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tile.value}</div>
                   </div>
                 ))}
               </div>
-              <div style={{ marginBottom: 28 }}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 8 }}>OFFICE PHONE / MOBILE NO.</label>
-                <input value={phone} onChange={e => setPhone(e.target.value)} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} onFocus={focusInput} onBlur={blurInput} />
+
+              <div style={{ height: 1, background: '#eef1f5', margin: '20px 0 14px' }} />
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#5f6b7d' }}>
+                <Clock size={15} color="#c27803" aria-hidden="true" />
+                <span>Last Active Login: <strong style={{ color: '#111827', fontWeight: 600 }}>{loginHistoryEntries[0] ? `${formatRelativeTime(loginHistoryEntries[0].time)} (${loginHistoryEntries[0].device})` : '—'}</strong></span>
               </div>
-              {saveError && (
-                <p style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16, textAlign: 'right' }}>{saveError}</p>
-              )}
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <motion.button onClick={handleSave} whileHover={{ filter: 'brightness(1.1)', y: -1 }} whileTap={{ scale: 0.97 }}
-                  style={{ background: '#008d46', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer', minWidth: 150, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 12 }}>
+                <button onClick={() => setActiveModal('password')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 14px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, color: '#374151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
                 >
-                  <AnimatePresence mode="wait">
-                    {saved
-                      ? <motion.span key="saved" initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Check size={16} /> SAVED!</motion.span>
-                      : <motion.span key="save" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>SAVE CHANGES</motion.span>
-                    }
-                  </AnimatePresence>
-                </motion.button>
+                  <KeyRound size={15} aria-hidden="true" /> Change Password
+                </button>
+                <button onClick={downloadDataLog} disabled={activityLogs.length === 0}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 38, padding: '0 14px', background: '#f5e4ff', border: '1px solid #e2c6f7', borderRadius: 8, color: '#59197a', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: activityLogs.length === 0 ? 'default' : 'pointer', opacity: activityLogs.length === 0 ? 0.6 : 1 }}
+                >
+                  <Download size={15} aria-hidden="true" /> Download Data Log
+                </button>
               </div>
             </motion.div>
 
-            <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-                <Lock size={18} color="#008d46" />
-                <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>PRIVACY &amp; SECURITY</span>
+            {/* Security controls */}
+            <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, border: '1px solid #e5e9f0', padding: 24, display: 'flex', flexDirection: 'column' }}>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: '#111827', margin: 0 }}>Security Controls</h2>
+              <div style={{ height: 1, background: '#eef1f5', margin: '16px 0 18px' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <button onClick={() => setActiveModal('2fa')} aria-label={`Two-factor authentication: ${twoFactorEnabled ? 'enabled' : 'disabled'}. Change setting.`}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, textAlign: 'left', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', background: twoFactorEnabled ? '#ecfdf5' : '#f7f9fc', border: `1px solid ${twoFactorEnabled ? '#a7f3d0' : '#e5e9f0'}` }}
+                >
+                  <ShieldCheck size={24} color="#047857" fill="#bbf7d0" aria-hidden="true" style={{ flexShrink: 0 }} />
+                  <span style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#111827' }}>Two-Factor Authentication</span>
+                    <span style={{ display: 'block', fontSize: 12, color: '#5f6b7d' }}>Email one-time code at sign-in</span>
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', padding: '4px 8px', borderRadius: 4, background: twoFactorEnabled ? '#047857' : '#e2e8f0', color: twoFactorEnabled ? '#fff' : '#374151' }}>{twoFactorEnabled ? 'ENABLED' : 'DISABLED'}</span>
+                </button>
+                {[
+                  { icon: <Database size={24} color="#7e22ce" aria-hidden="true" />, title: 'Audit Trail', desc: 'Append-only log, cannot be altered', badge: 'ACTIVE', badgeBg: '#1e293b', badgeColor: '#fff' },
+                  { icon: <Lock size={24} color="#0369a1" aria-hidden="true" />, title: 'RBAC Permission Level', desc: roleAccessLabel, badge: 'VERIFIED', badgeBg: '#e0f2fe', badgeColor: '#075985' },
+                ].map(row => (
+                  <div key={row.title} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', borderRadius: 12, background: '#f7f9fc', border: '1px solid #e5e9f0' }}>
+                    <span style={{ flexShrink: 0, display: 'flex' }}>{row.icon}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#111827' }}>{row.title}</span>
+                      <span style={{ display: 'block', fontSize: 12, color: '#5f6b7d' }}>{row.desc}</span>
+                    </span>
+                    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', padding: '4px 8px', borderRadius: 4, background: row.badgeBg, color: row.badgeColor }}>{row.badge}</span>
+                  </div>
+                ))}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {securityRows.map(({ icon: Icon, title, desc, action, view }, i) => {
-                  const actionLines = action.split(' ');
-                  return (
-                    <div key={title} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5" style={{ padding: '20px 0', borderTop: i > 0 ? '1px solid #e2e8f0' : 'none' }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 12, border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Icon size={20} color="#1f3151" strokeWidth={1.5} />
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>{title}</div>
-                        <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.5 }}>{desc}</div>
-                      </div>
-                      <motion.button
-                        onClick={() => { setActiveModal('privacy'); setPrivacyView(view) }}
-                        whileHover={{ x: -2 }}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', flexShrink: 0, textAlign: 'center', lineHeight: 1.3, minHeight: 44, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        {actionLines.map((line, idx) => <div key={idx}>{line}</div>)}
-                      </motion.button>
-                    </div>
-                  );
-                })}
+              <div style={{ marginTop: 'auto', paddingTop: 18 }}>
+                <div style={{ borderTop: '1px solid #eef1f5', paddingTop: 14, display: 'flex', gap: 8, fontSize: 12, color: '#5f6b7d', lineHeight: 1.5 }}>
+                  <Info size={14} color="#047857" aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <span>Under Republic Act 10173, access to health records is restricted by role, and every action on them is recorded in the audit trail.</span>
+                </div>
               </div>
-            </motion.div>
-
-            <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: '32px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-                <FileEdit size={18} color="#805ad5" />
-                <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151' }}>REQUEST A CHANGE</span>
-              </div>
-              <div style={{ fontSize: 13, color: '#718096', lineHeight: 1.6, marginBottom: 16 }}>Job title, birth date, employment status, and department require admin approval — submit a request and track its status here.</div>
-              <motion.button onClick={() => setActiveModal('changeRequests')} whileHover={{ filter: 'brightness(1.1)', y: -1 }} whileTap={{ scale: 0.97 }}
-                style={{ background: '#805ad5', color: '#fff', border: 'none', borderRadius: 999, padding: '12px 24px', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer' }}
-              >
-                Request a Change
-              </motion.button>
             </motion.div>
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ marginTop: 24 }}>
+            {[
+              { icon: <FileText size={17} color="#7e22ce" aria-hidden="true" />, bg: '#f5e4ff', title: 'RA 10173 Compliance', desc: 'Role-restricted access and a full audit trail under the Data Privacy Act of 2012.' },
+              { icon: <Lock size={17} color="#047857" aria-hidden="true" />, bg: '#e6f4ea', title: 'AES-256 Storage Encryption', desc: 'Medical attachments and records are encrypted at rest by the hosting platform.' },
+              { icon: <ShieldCheck size={17} color="#b45309" aria-hidden="true" />, bg: '#fff4de', title: 'Role-Based Access Control', desc: 'Staff see their own records, unit heads their department, administrators all records.' },
+            ].map((card, i) => (
+              <motion.div key={card.title} custom={3 + i} variants={fadeRise} initial="hidden" animate="visible"
+                style={{ background: '#fff', borderRadius: 16, border: '1px solid #e5e9f0', padding: '20px 22px', display: 'flex', gap: 16 }}
+              >
+                <span style={{ width: 36, height: 36, borderRadius: 10, background: card.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{card.icon}</span>
+                <span>
+                  <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: '#111827' }}>{card.title}</span>
+                  <span style={{ display: 'block', fontSize: 13, color: '#5f6b7d', lineHeight: 1.5, marginTop: 2 }}>{card.desc}</span>
+                </span>
+              </motion.div>
+            ))}
+          </div>
+
+          {/* The mockup's audit table. Staff see only their own recorded actions; the administrator sees the whole
+              system's (GET /audit-trail), which is what the mockup's multi-user rows show. */}
+          <motion.div custom={6} variants={fadeRise} initial="hidden" animate="visible"
+            style={{ marginTop: 24, background: '#fff', borderRadius: 16, border: '1px solid #e5e9f0', boxShadow: '0 4px 8px rgba(15,23,42,0.14)', overflow: 'hidden' }}
+          >
+            <div style={{ padding: '20px 24px 14px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h2 style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 17, fontWeight: 700, color: '#111827', margin: 0 }}>
+                  <AlertCircle size={17} color="#dc2626" aria-hidden="true" /> System Activity &amp; Audit Trail
+                </h2>
+                <div style={{ fontSize: 13, color: '#5e6d85', marginTop: 2 }}>
+                  {role === 'admin' ? 'Recent recorded actions across the system, from the append-only audit log' : 'Your own recorded actions, from the system\u2019s append-only audit log'}
+                </div>
+              </div>
+              {role !== 'admin' && activityLogs.length > AUDIT_ROWS_SHOWN && (
+                <button onClick={() => setActiveModal('activity')} style={{ background: 'none', border: 'none', color: '#047857', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 36 }}>
+                  View all {activityLogs.length} →
+                </button>
+              )}
+            </div>
+            {/* A horizontally scrollable region must be keyboard-reachable (it scrolls below ~800px wide). */}
+            <div role="region" aria-label="Audit trail table" tabIndex={0} style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                <caption className="sr-only">{role === 'admin' ? 'Recent activity across the system' : 'Your recent account activity'}</caption>
+                <colgroup>{AUDIT_COLUMNS.map(c => <col key={c.label} style={{ width: c.width }} />)}</colgroup>
+                <thead>
+                  <tr style={{ background: '#f4f7fb', height: 50 }}>
+                    {AUDIT_COLUMNS.map((c, i) => (
+                      <th key={c.label} scope="col" style={{ textAlign: 'left', padding: i === 0 ? '0 12px 0 24px' : '0 12px', fontSize: 13, fontWeight: 600, color: '#1a2b41', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{c.icon}{c.label}</span>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {role === 'admin'
+                    ? (auditTrail ?? []).slice(0, trailShown).map((e, i) => {
+                        const asLog: ActivityLogEntry = { title: e.title, time: e.time, ip: null, action: e.action, entityType: e.entityType, entityRef: e.entityRef }
+                        return (
+                          <tr key={`${e.time}-${i}`} style={{ height: 54, borderTop: '1px solid #eef1f5', fontSize: 13, color: '#4b5563', letterSpacing: '0.02em' }}>
+                            <td style={{ padding: '0 12px 0 24px', whiteSpace: 'nowrap' }}>{formatAuditTimestamp(e.time)}</td>
+                            <td title={e.actor?.fullName} style={{ padding: '0 12px', overflow: 'hidden' }}>
+                              <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.actor?.employeeId ?? '—'}</div>
+                              {e.actor && <div style={{ fontSize: 12, color: '#5f6b7d', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.actor.fullName}</div>}
+                            </td>
+                            <td style={{ padding: '0 12px', whiteSpace: 'nowrap' }}>{e.actor ? ROLE_LABEL[e.actor.role] : 'Not signed in'}</td>
+                            <td title={e.title} style={{ padding: '0 12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{auditActionCode(asLog)}</td>
+                            <td style={{ padding: '0 12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{auditResource(asLog)}</td>
+                          </tr>
+                        )
+                      })
+                    : activityLogs.slice(0, AUDIT_ROWS_SHOWN).map((log, i) => (
+                        <tr key={`${log.time}-${i}`} style={{ height: 50, borderTop: '1px solid #eef1f5', fontSize: 13, color: '#4b5563', letterSpacing: '0.02em' }}>
+                          <td style={{ padding: '0 12px 0 24px', whiteSpace: 'nowrap' }}>{formatAuditTimestamp(log.time)}</td>
+                          <td style={{ padding: '0 12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{employeeId}</td>
+                          <td style={{ padding: '0 12px', whiteSpace: 'nowrap' }}>{roleLabel}</td>
+                          <td title={log.title} style={{ padding: '0 12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{auditActionCode(log)}</td>
+                          <td style={{ padding: '0 12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{auditResource(log)}</td>
+                        </tr>
+                      ))}
+                </tbody>
+              </table>
+            </div>
+            {role === 'admin' && auditTrailError && <div role="alert" style={{ padding: '16px 24px', fontSize: 13, fontWeight: 600, color: '#b42318' }}>{auditTrailError}</div>}
+            {role === 'admin' && auditTrail === null && <div role="status" style={{ padding: '24px', textAlign: 'center', fontSize: 13, color: '#5f6b7d' }}>Loading the audit trail…</div>}
+            {role === 'admin' && auditTrail !== null && auditTrail.length === 0 && !auditTrailError && <div style={{ padding: '28px 24px', textAlign: 'center', fontSize: 13, color: '#5f6b7d' }}>No activity recorded yet.</div>}
+            {role === 'admin' && auditTrail !== null && auditTrail.length > trailShown && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '14px 24px', borderTop: '1px solid #eef1f5' }}>
+                <span style={{ fontSize: 13, color: '#55667e' }}>Showing {trailShown} of {auditTrail.length}</span>
+                <button onClick={() => setTrailShown(n => n + ADMIN_TRAIL_STEP)} style={{ minHeight: 40, padding: '0 18px', border: '1px solid #d5dce6', borderRadius: 10, background: '#fff', color: '#1f3151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Show more</button>
+              </div>
+            )}
+            {role !== 'admin' && activityLogs.length === 0 && (
+              <div style={{ padding: '28px 24px', textAlign: 'center', fontSize: 13, color: '#5f6b7d' }}>No activity recorded yet.</div>
+            )}
+          </motion.div>
+
+          {/* Administrator tools: the digital signature, change-request review and review performance that the
+              admin profile always had, kept reachable here rather than dropped because the mockup doesn't draw them. */}
+          {role === 'admin' && (
+            <motion.div custom={7} variants={fadeRise} initial="hidden" animate="visible" aria-label="Administrator tools"
+              className="grid grid-cols-1 lg:grid-cols-3 gap-6" style={{ marginTop: 24 }}
+            >
+              <section aria-labelledby="admin-sig" style={{ background: '#fff', borderRadius: 16, border: '1px solid #e5e9f0', padding: '20px 22px', display: 'flex', flexDirection: 'column' }}>
+                <h2 id="admin-sig" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}><FileEdit size={16} color="#2b6cb0" aria-hidden="true" /> Digital Signature</h2>
+                <div style={{ background: '#f1f5f9', borderRadius: 12, height: 84, margin: '14px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  {signatureImage
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={signatureImage} alt="Saved signature" style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }} />
+                    : <span style={{ fontSize: 13, color: '#5f6b7d', fontStyle: 'italic' }}>No signature saved</span>}
+                </div>
+                <p style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.5, margin: '0 0 14px' }}>Applied automatically to the medical clearances you approve.</p>
+                <button onClick={() => setAdminView('signature')} style={{ marginTop: 'auto', minHeight: 40, background: '#008541', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Manage Signature</button>
+              </section>
+
+              <section aria-labelledby="admin-cr" style={{ background: '#fff', borderRadius: 16, border: '1px solid #e5e9f0', padding: '20px 22px', display: 'flex', flexDirection: 'column' }}>
+                <h2 id="admin-cr" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>
+                  <FileEdit size={16} color="#805ad5" aria-hidden="true" /> Change Requests
+                  {pendingChangeRequests.length > 0 && <span style={{ background: '#fff0bd', color: '#764000', borderRadius: 999, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>{pendingChangeRequests.length} pending</span>}
+                </h2>
+                <p style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.5, margin: '14px 0' }}>Staff-submitted requests to change a field that isn&apos;t self-service editable (job title, birth date, employment status, department).</p>
+                <button onClick={() => setAdminView('changeRequests')} style={{ marginTop: 'auto', minHeight: 40, background: '#6b46c1', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Review Requests</button>
+              </section>
+
+              <section aria-labelledby="admin-perf" style={{ background: '#fff', borderRadius: 16, border: '1px solid #e5e9f0', padding: '20px 22px' }}>
+                <h2 id="admin-perf" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 15, fontWeight: 700, color: '#111827', margin: 0 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Activity size={16} color="#2b6cb0" aria-hidden="true" /> Review Performance</span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#5f6b7d', textTransform: 'uppercase' }}>All time</span>
+                </h2>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 18 }}>
+                  {adminStats.map(stat => (
+                    <div key={stat.label} style={{ textAlign: 'center', background: '#f7f9fc', border: '1px solid #e5e9f0', borderRadius: 12, padding: '14px 4px' }}>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: stat.color }}>{stat.value}</div>
+                      <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em', marginTop: 2 }}>{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+                <p style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.5, margin: '14px 0 0' }}>Documents you have reviewed, and how many you approved.</p>
+              </section>
+            </motion.div>
+          )}
+
+          {/* Working features the mockup doesn't draw, kept reachable here rather than removed. */}
+          <motion.div custom={7} variants={fadeRise} initial="hidden" animate="visible"
+            style={{ marginTop: 24, background: '#fff', borderRadius: 16, border: '1px solid #e5e9f0', padding: '20px 24px' }}
+          >
+            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: '0 0 14px' }}>More Account Settings</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+              {[
+                { icon: <User size={16} aria-hidden="true" />, label: 'Edit Contact Details', onClick: () => setActiveModal('account') },
+                { icon: <Lock size={16} aria-hidden="true" />, label: 'Change PIN', onClick: () => { setActiveModal('privacy'); setPrivacyView('pin') } },
+                { icon: <Smartphone size={16} aria-hidden="true" />, label: 'Signed-in Devices', onClick: () => { setActiveModal('privacy'); setPrivacyView('devices') } },
+                { icon: <Eye size={16} aria-hidden="true" />, label: 'Data Privacy Settings', onClick: () => { setActiveModal('privacy'); setPrivacyView('data') } },
+                { icon: <FileEdit size={16} aria-hidden="true" />, label: 'Request a Change', onClick: () => setActiveModal('changeRequests') },
+                ...(role === 'admin' ? [{ icon: <Clock size={16} aria-hidden="true" />, label: 'Login History', onClick: () => { setAdminView('privacy'); setAdminPrivacyView('history') } }] : []),
+                { icon: <LogOut size={16} aria-hidden="true" />, label: 'Log Out', onClick: handleLogout, danger: true },
+              ].map(item => (
+                <button key={item.label} onClick={item.onClick}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, padding: '0 14px', background: item.danger ? '#fff5f5' : '#f7f9fc', border: `1px solid ${item.danger ? '#fecdca' : '#e5e9f0'}`, borderRadius: 10, color: item.danger ? '#b42318' : '#374151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left' }}
+                >
+                  {item.icon}<span style={{ flex: 1 }}>{item.label}</span>{!item.danger && <ChevronRight size={15} color="#94a3b8" aria-hidden="true" />}
+                </button>
+              ))}
+            </div>
+          </motion.div>
         </div>
-        </>
         )}
       </div>
 
@@ -1369,9 +1517,11 @@ export default function Profile() {
                     {activeModal === 'privacy' && privacyViewTitle[privacyView]}
                     {activeModal === 'account' && 'ACCOUNT SETTINGS'}
                     {activeModal === 'changeRequests' && 'REQUEST A CHANGE'}
+                    {activeModal === 'password' && 'CHANGE PASSWORD'}
+                    {activeModal === '2fa' && 'TWO-FACTOR AUTHENTICATION'}
                   </span>
                 </div>
-                <button onClick={closeModal} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                <button onClick={closeModal} aria-label="Close" style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5f6b7d', flexShrink: 0 }}>
                   <X size={14} />
                 </button>
               </div>
@@ -1380,15 +1530,15 @@ export default function Profile() {
                 <div>
                   {activityLogs.map((log, i) => (
                     <div key={i} style={{ display: 'flex', gap: 10, padding: '14px 0', borderTop: i > 0 ? '1px solid #e2e8f0' : 'none' }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#008d46', flexShrink: 0, marginTop: 5 }} />
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#008541', flexShrink: 0, marginTop: 5 }} />
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', marginBottom: 3 }}>{log.title}</div>
-                        <div style={{ fontSize: 12, color: '#a0aec0' }}>{formatLogTime(log.time)}</div>
+                        <div style={{ fontSize: 12, color: '#5f6b7d' }}>{formatLogTime(log.time)}</div>
                       </div>
                     </div>
                   ))}
                   {activityLogs.length === 0 && (
-                    <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 12, padding: '20px 0' }}>No activity yet.</div>
+                    <div style={{ textAlign: 'center', color: '#5f6b7d', fontSize: 12, padding: '20px 0' }}>No activity yet.</div>
                   )}
                 </div>
               )}
@@ -1407,7 +1557,7 @@ export default function Profile() {
 
               {activeModal === 'privacy' && privacyView === 'pin' && (
                 <div>
-                  <p style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.6, marginBottom: 20 }}>
+                  <p style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 20 }}>
                     Secure your account with a unique lockpin. You&apos;ll use this PIN to confirm sensitive actions.
                   </p>
                   {[
@@ -1416,7 +1566,7 @@ export default function Profile() {
                     { label: 'Confirm New PIN', value: confirmPin, onChange: handlePinInput(setConfirmPin) },
                   ].map(f => (
                     <div key={f.label} style={{ marginBottom: 16 }}>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>{f.label}</label>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>{f.label}</label>
                       <input
                         type="password"
                         inputMode="numeric"
@@ -1439,7 +1589,7 @@ export default function Profile() {
                   )}
                   <button
                     onClick={handleUpdatePin}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008541', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                   >
                     <AnimatePresence mode="wait">
                       {pinSaved
@@ -1453,7 +1603,7 @@ export default function Profile() {
 
               {activeModal === 'privacy' && privacyView === 'devices' && (
                 <div>
-                  <p style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.6, marginBottom: 16 }}>
+                  <p style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 16 }}>
                     View and authenticate devices linked to your VMMC profile.
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1464,17 +1614,17 @@ export default function Profile() {
                         </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#1f3151' }}>{d.name}</div>
-                          <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{d.deviceType ?? 'Device'} • {formatRelativeTime(d.lastActive)}</div>
+                          <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>{d.deviceType ?? 'Device'} • {formatRelativeTime(d.lastActive)}</div>
                         </div>
                         {d.isCurrent ? (
-                          <span style={{ fontSize: 12, fontWeight: 800, color: '#008d46', background: '#e6f9ee', borderRadius: 999, padding: '4px 8px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>This Device</span>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: '#047857', background: '#e6f9ee', borderRadius: 999, padding: '4px 8px', textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>This Device</span>
                         ) : (
-                          <button onClick={() => removeDevice(d.id)} style={{ fontSize: 12, fontWeight: 800, color: '#e53e3e', background: 'none', border: 'none', cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0, minHeight: 44, padding: '0 4px', display: 'flex', alignItems: 'center' }}>Remove</button>
+                          <button onClick={() => removeDevice(d.id)} style={{ fontSize: 12, fontWeight: 800, color: '#b42318', background: 'none', border: 'none', cursor: 'pointer', textTransform: 'uppercase', flexShrink: 0, minHeight: 44, padding: '0 4px', display: 'flex', alignItems: 'center' }}>Remove</button>
                         )}
                       </div>
                     ))}
                     {devices.length === 0 && (
-                      <div style={{ textAlign: 'center', color: '#a0aec0', fontSize: 12, padding: '20px 0' }}>No other devices registered.</div>
+                      <div style={{ textAlign: 'center', color: '#5f6b7d', fontSize: 12, padding: '20px 0' }}>No other devices registered.</div>
                     )}
                   </div>
                 </div>
@@ -1482,7 +1632,7 @@ export default function Profile() {
 
               {activeModal === 'privacy' && privacyView === 'data' && (
                 <div>
-                  <p style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.6, marginBottom: 4 }}>
+                  <p style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 4 }}>
                     Enforce health registry encryption and adjust data telemetry visibility rules.
                   </p>
                   <div>
@@ -1490,7 +1640,7 @@ export default function Profile() {
                       <div key={opt.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0', borderTop: i > 0 ? '1px solid #e2e8f0' : 'none' }}>
                         <div style={{ flex: 1 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', marginBottom: 2 }}>{opt.label}</div>
-                          <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.4 }}>{opt.desc}</div>
+                          <div style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.4 }}>{opt.desc}</div>
                         </div>
                         <ToggleSwitch checked={dataToggles[opt.key]} onChange={() => toggleDataPrivacy(opt.key)} />
                       </div>
@@ -1507,7 +1657,7 @@ export default function Profile() {
                     { label: 'Mobile Number', value: phone, onChange: setPhone },
                   ].map(f => (
                     <div key={f.label} style={{ marginBottom: 16 }}>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>{f.label}</label>
+                      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>{f.label}</label>
                       <input
                         value={f.value}
                         onChange={e => f.onChange(e.target.value)}
@@ -1520,7 +1670,7 @@ export default function Profile() {
                   )}
                   <button
                     onClick={handleSave}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008541', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}
                   >
                     <AnimatePresence mode="wait">
                       {saved
@@ -1532,14 +1682,52 @@ export default function Profile() {
                 </div>
               )}
 
+              {activeModal === 'password' && (
+                <div>
+                  {[
+                    { id: 'pw-current', label: 'Current Password', value: currentPassword, onChange: setCurrentPassword, autoComplete: 'current-password' },
+                    { id: 'pw-new', label: 'New Password', value: newPassword, onChange: setNewPassword, autoComplete: 'new-password' },
+                    { id: 'pw-confirm', label: 'Confirm New Password', value: confirmPassword, onChange: setConfirmPassword, autoComplete: 'new-password' },
+                  ].map(f => (
+                    <div key={f.id} style={{ marginBottom: 16 }}>
+                      <label htmlFor={f.id} style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>{f.label}</label>
+                      <input id={f.id} type="password" autoComplete={f.autoComplete} value={f.value} onChange={e => f.onChange(e.target.value)}
+                        style={{ width: '100%', padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 13, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', boxSizing: 'border-box', background: '#f8fafc' }}
+                      />
+                    </div>
+                  ))}
+                  {pwAttempted && (pwErrorMessage || pwServerError) && (
+                    <p role="alert" style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>{pwErrorMessage || pwServerError}</p>
+                  )}
+                  <button
+                    onClick={() => handleUpdatePassword(closeModal)}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#006042', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    {pwSaved ? <><Check size={15} /> Password Updated!</> : 'Update Password'}
+                  </button>
+                </div>
+              )}
+
+              {activeModal === '2fa' && (
+                <div>
+                  <p style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 16 }}>
+                    When on, each sign-in also asks for a one-time code sent to your email ({email || 'your account email'}).
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', borderRadius: 14, padding: '14px 16px' }}>
+                    <span id="twofa-label" style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#1f3151' }}>Require email code at sign-in</span>
+                    <ToggleSwitch checked={twoFactorEnabled} onChange={toggleTwoFactor} labelledBy="twofa-label" />
+                  </div>
+                </div>
+              )}
+
               {activeModal === 'changeRequests' && (
                 <div>
-                  <p style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.6, marginBottom: 16 }}>
+                  <p style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 16 }}>
                     Job title, birth date, employment status, and department require admin approval before they take effect — everything else on Account Security applies immediately.
                   </p>
 
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>Field</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>Field</label>
                     <select
                       value={crFieldName}
                       onChange={e => setCrFieldName(e.target.value)}
@@ -1550,7 +1738,7 @@ export default function Profile() {
                   </div>
 
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>New Value</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>New Value</label>
                     <input
                       type={crFieldName === 'birth_date' ? 'date' : 'text'}
                       value={crRequestedValue}
@@ -1561,7 +1749,7 @@ export default function Profile() {
                   </div>
 
                   <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#718096', marginBottom: 6 }}>Reason</label>
+                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>Reason</label>
                     <textarea
                       value={crReason}
                       onChange={e => setCrReason(e.target.value)}
@@ -1576,14 +1764,14 @@ export default function Profile() {
                   <button
                     onClick={handleSubmitChangeRequest}
                     disabled={crSubmitting}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008d46', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: crSubmitting ? 'default' : 'pointer', opacity: crSubmitting ? 0.75 : 1, marginBottom: 20 }}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#008541', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: crSubmitting ? 'default' : 'pointer', opacity: crSubmitting ? 0.75 : 1, marginBottom: 20 }}
                   >
                     {crSubmitting ? 'Submitting…' : 'Submit Request'}
                   </button>
 
-                  <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Your Requests</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#5f6b7d', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10 }}>Your Requests</div>
                   {myChangeRequests.length === 0 && (
-                    <div style={{ fontSize: 12, color: '#a0aec0', textAlign: 'center', padding: '16px 0' }}>No requests yet.</div>
+                    <div style={{ fontSize: 12, color: '#5f6b7d', textAlign: 'center', padding: '16px 0' }}>No requests yet.</div>
                   )}
                   {myChangeRequests.map(cr => {
                     const statusStyle = changeRequestStatusStyle[cr.status]
@@ -1594,9 +1782,9 @@ export default function Profile() {
                           <span style={{ fontSize: 13, fontWeight: 700, color: '#1f3151' }}>{fieldLabel}</span>
                           <span style={{ fontSize: 12, fontWeight: 800, color: statusStyle.color, background: statusStyle.bg, borderRadius: 999, padding: '2px 10px', textTransform: 'uppercase' }}>{cr.status}</span>
                         </div>
-                        <div style={{ fontSize: 12, color: '#718096' }}>{cr.currentValue ?? '—'} → {cr.requestedValue}</div>
+                        <div style={{ fontSize: 12, color: '#5f6b7d' }}>{cr.currentValue ?? '—'} → {cr.requestedValue}</div>
                         {cr.status === 'REJECTED' && cr.reviewNotes && (
-                          <div style={{ fontSize: 12, color: '#e53e3e', marginTop: 4 }}>Reason: {cr.reviewNotes}</div>
+                          <div style={{ fontSize: 12, color: '#b42318', marginTop: 4 }}>Reason: {cr.reviewNotes}</div>
                         )}
                       </div>
                     )

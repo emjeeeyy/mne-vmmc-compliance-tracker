@@ -123,6 +123,7 @@ export default function Login() {
         style={{ width: '100%', padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
         onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
         onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
+        onKeyDown={e => { if (e.key === 'Enter') handleLogin() }}
       />
     </div>
   )
@@ -135,6 +136,7 @@ export default function Login() {
           style={{ width: '100%', padding: '14px 40px 14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
           onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
           onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
+          onKeyDown={e => { if (e.key === 'Enter') handleLogin() }}
         />
         <button onClick={() => setShowPassword(v => !v)} style={{ position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', padding: 0 }}>
           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -221,6 +223,7 @@ export default function Login() {
           style={{ width: '100%', padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 20, fontWeight: 700, letterSpacing: '0.4em', textAlign: 'center', fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
           onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
           onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
+          onKeyDown={e => { if (e.key === 'Enter') handleVerifyOtp() }}
         />
       </div>
 

@@ -774,6 +774,13 @@
                     "type": "string",
                     "format": "binary"
                   },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "APE",
+                      "HEPB_TITER"
+                    ]
+                  },
                   "examDate": {
                     "type": "string",
                     "format": "date"
@@ -791,6 +798,22 @@
                       "NOT_DETECTED",
                       "DETECTED"
                     ]
+                  },
+                  "titerResult": {
+                    "type": "string",
+                    "enum": [
+                      "REACTIVE",
+                      "NON_REACTIVE"
+                    ]
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "facilityName": {
+                    "type": "string"
+                  },
+                  "notes": {
+                    "type": "string"
                   }
                 }
               }
@@ -799,6 +822,34 @@
         },
         "responses": {
           "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/documents/{id}/file-url": {
+      "get": {
+        "operationId": "DocumentsController_getFileUrl",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "description": ""
           }
         },
@@ -885,6 +936,65 @@
         ],
         "tags": [
           "monitoring"
+        ]
+      }
+    },
+    "/api/monitoring/records/{id}/remind": {
+      "post": {
+        "operationId": "MonitoringController_sendReminder",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "monitoring"
+        ]
+      }
+    },
+    "/api/notifications/log": {
+      "get": {
+        "operationId": "NotificationLogController_getLog",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "How many of the most recent events to return.",
+            "schema": {
+              "maximum": 100,
+              "default": 30,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "notifications"
         ]
       }
     },
@@ -1389,6 +1499,141 @@
         ]
       }
     },
+    "/api/registry/ape": {
+      "get": {
+        "operationId": "RegistryController_getApe",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "registry"
+        ]
+      }
+    },
+    "/api/registry/pre-employment": {
+      "get": {
+        "operationId": "RegistryController_getPreEmployment",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "registry"
+        ]
+      }
+    },
+    "/api/registry/pep": {
+      "get": {
+        "operationId": "RegistryController_getPep",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "registry"
+        ]
+      }
+    },
+    "/api/registry/immunizations": {
+      "get": {
+        "operationId": "RegistryController_getImmunizations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "registry"
+        ]
+      }
+    },
+    "/api/registry/certificate/{employeeId}": {
+      "get": {
+        "operationId": "RegistryController_getClearanceCertificate",
+        "parameters": [
+          {
+            "name": "employeeId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "registry"
+        ]
+      }
+    },
+    "/api/audit-trail": {
+      "get": {
+        "operationId": "AuditTrailController_list",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "How many recent entries to return.",
+            "schema": {
+              "maximum": 50,
+              "default": 25,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "tags": [
+          "audit-trail"
+        ]
+      }
+    },
     "/api/change-requests": {
       "post": {
         "operationId": "ChangeRequestsController_create",
@@ -1788,6 +2033,10 @@
           "reason": {
             "type": "string",
             "description": "Required when action is \"reject\"."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Reviewer findings recorded with an approval (optional)."
           },
           "signatureId": {
             "type": "string",
