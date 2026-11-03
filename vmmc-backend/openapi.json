@@ -1836,9 +1836,14 @@
       "SignupDto": {
         "type": "object",
         "properties": {
-          "employeeId": {
+          "email": {
             "type": "string",
-            "example": "VMMC-25-0021"
+            "example": "user@vmmc.gov.ph"
+          },
+          "privacyAcknowledged": {
+            "type": "boolean",
+            "example": true,
+            "description": "Acknowledgment of the VMMC privacy notice."
           },
           "employmentType": {
             "type": "string",
@@ -1850,7 +1855,8 @@
           }
         },
         "required": [
-          "employeeId"
+          "email",
+          "privacyAcknowledged"
         ]
       },
       "FirstLoginPasswordChangeDto": {

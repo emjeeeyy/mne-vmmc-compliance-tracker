@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -193,10 +194,9 @@ export default function Login() {
   const finePrint = (
     <>
       <p style={{ fontSize: 12, color: '#4a5568', textAlign: 'center', marginBottom: 32, lineHeight: 1.6, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-        BY LOGGING IN, YOU AGREE TO THE<br/>
-        <span style={{ fontWeight: 800, color: '#1f3151', cursor: 'pointer' }}>TERMS OF SERVICE</span>
-        {' '}AND{' '}
-        <span style={{ fontWeight: 800, color: '#1f3151', cursor: 'pointer' }}>PRIVACY POLICY</span>
+        Read the{' '}
+        <Link href="/privacy" style={{ fontWeight: 800, color: '#1f3151', textDecoration: 'underline' }}>PRIVACY NOTICE</Link>
+        {' '}to understand how account, health, and security information is handled.
       </p>
       <div style={{ textAlign: 'center' }}>
         <span style={{ fontSize: 12, fontWeight: 800, color: '#3a7d44', letterSpacing: '0.1em', textTransform: 'uppercase' }}>AUTHORIZED ACCESS ONLY</span>

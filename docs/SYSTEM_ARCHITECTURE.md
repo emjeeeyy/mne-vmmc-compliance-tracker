@@ -36,6 +36,81 @@ They are **fully independent deployable units** connected by exactly one contrac
                                                                                           └──────────┘
 ```
 
+### System Tree
+
+This is the current runtime map. The frontend and backend are independent applications; the REST API is their only source-code boundary. The browser never connects directly to Supabase.
+
+```mermaid
+flowchart TD
+  person[Staff / Unit Head / Admin] --> browser[Browser]
+
+  subgraph frontend["vmmc-frontend: Next.js App Router"]
+    browser --> routes[Public routes: login, signup, forgot password]
+    browser --> privacy[Public privacy notice route]
+    browser --> cookieNotice[Global essential-cookie notice]
+    browser --> protected[Protected routes: dashboard, compliance, upload, profile, notifications]
+    protected --> uiGuard[useAuthGuard checks the non-secret UI session shell]
+    routes --> screens[Screen components in src/screens]
+    privacy --> privacyPage[Data-use and session-cookie details]
+    uiGuard --> screens
+    screens --> apiClient[Shared API client: timeout, retry, JSON, credentials include]
+  end
+
+  subgraph backend["vmmc-backend: NestJS REST API"]
+    apiClient -->|HTTP /api| entry[main.ts: Helmet, CORS, validation, exception filter]
+    entry --> guards[Auth and role guards; audit interceptor]
+    guards --> controllers[Feature controllers]
+    controllers --> services[Feature services]
+    services --> supabaseClient[Supabase service]
+  end
+
+  subgraph features["Backend feature areas"]
+    controllers --> auth[Auth: login, OTP, signup, password reset]
+    controllers --> records[Compliance, documents, signatures, tracking]
+    controllers --> selfserve[Profile, departments, dashboards, reports, registry]
+    controllers --> operations[Change requests, audit trail, health]
+  end
+
+  subgraph platform["Supabase platform"]
+    supabaseClient --> authStore[Supabase Auth]
+    supabaseClient --> database[(Postgres + RLS)]
+    supabaseClient --> storage[Private document storage]
+  end
+
+  subgraph monitoring["Monitoring and Event Management"]
+    schedule[Daily Asia/Manila scan or admin scan] --> monitor[MonitoringService]
+    monitor --> classifier[EventClassifierService]
+    services -->|Screening review and record changes| classifier
+    classifier --> database
+    classifier --> dispatcher[NotificationDispatcherService]
+    dispatcher --> inApp[In-app notification]
+    dispatcher --> email[Email: Brevo HTTPS]
+    dispatcher --> sms[SMS: Semaphore HTTPS]
+    dispatcher --> notificationLog[Persist channel outcome]
+    inApp --> database
+    email --> notificationLog
+    sms --> notificationLog
+    classifier --> escalation[Exception escalation to unit head]
+    escalation --> database
+  end
+
+  authStore -. validates the HttpOnly session cookie .-> guards
+```
+
+```mermaid
+flowchart TD
+  login[Employee ID + password] --> twoFactor{2FA enabled?}
+  twoFactor -->|Yes| otp[Email OTP challenge]
+  otp -->|Verified| session[Backend sets HttpOnly vmmc_session cookie]
+  twoFactor -->|No| session
+  session --> passwordChange{Must change initial password?}
+  passwordChange -->|Yes| change[Required first-login password screen]
+  change --> dashboard[Dashboard]
+  passwordChange -->|No| dashboard
+  dashboard --> apiCalls[Protected API calls include cookie]
+  apiCalls --> serverCheck[Backend validates token and role]
+```
+
 **Local dev, both repos running together:**
 ```bash
 # one command from the repo root (see package.json) — runs both via `concurrently`
@@ -60,7 +135,7 @@ The backend's `CORS_ORIGIN` env var must match the frontend's actual origin, and
 
 The clearest way to actually understand how the two halves fit together is to trace one real user action all the way through both layers. Take the highest-stakes one: **an admin approves a document that turns out to be a positive result.**
 
-1. **Frontend (`Upload.tsx`, admin's Review Queue):** admin clicks Approve on a pending document, with their saved digital signature attached. `api.patch('/documents/:id/review', { action: 'approve', signatureId })` — the shared API client (frontend docs §5) attaches the bearer token automatically.
+1. **Frontend (`Upload.tsx`, admin's Review Queue):** admin clicks Approve on a pending document, with their saved digital signature attached. `api.patch('/documents/:id/review', { action: 'approve', signatureId })` — the shared API client (frontend docs §5) sends the request with `credentials: 'include'`, so the browser attaches the HttpOnly session cookie automatically.
 2. **Backend, `SupabaseAuthGuard`:** verifies the token by calling `supabase.auth.getUser(token)` (this project uses asymmetric ES256 signing keys, so there's no local secret to verify against — see backend docs §4), attaches the caller's `EmployeeContext` to the request.
 3. **Backend, `RolesGuard`:** confirms the caller is ADMIN.
 4. **Backend, `DocumentsService.review()`:** validates the signature belongs to this admin, marks the document `APPROVED`, links it to the employee's current-cycle `compliance_records` row, and — **synchronously, in the same request** — calls `EventClassifierService.classify()` on that compliance record.

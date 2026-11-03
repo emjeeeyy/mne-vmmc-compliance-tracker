@@ -1,11 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class SignupDto {
-  @ApiProperty({ example: 'VMMC-25-0021' })
+  @ApiProperty({ example: 'user@vmmc.gov.ph' })
   @IsString()
   @MinLength(1)
-  employeeId: string;
+  email: string;
+
+  @ApiProperty({ example: true, description: 'Acknowledgment of the VMMC privacy notice.' })
+  @IsBoolean()
+  privacyAcknowledged: boolean;
 
   @ApiProperty({ enum: ['PERMANENT', 'COS'], required: false, example: 'PERMANENT' })
   @IsOptional()
