@@ -3,11 +3,12 @@
 import { useState, useEffect, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, ChevronDown, X, Download, HelpCircle } from 'lucide-react'
+import { Search, X, Download, HelpCircle, FileText, FileCheck, Folder, CalendarDays, UserCheck, ShieldCheck } from 'lucide-react'
 import { fadeRise } from '@/lib/motion'
 import { getPreciseRole, type PreciseRole } from '@/lib/auth'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
-import { SkeletonListRow, SkeletonStaffCard, SkeletonCard } from '@/components/Skeleton'
+import { SkeletonListRow, SkeletonStaffCard } from '@/components/Skeleton'
+import ModulesRegistry from './ModulesRegistry'
 
 type Status = 'Cleared' | 'Infiltrate (L)' | 'Not Detected' | 'Detected' | '—'
 
@@ -94,7 +95,7 @@ function PulseDot({ alert, color }: { alert: boolean, color: string }) {
 }
 
 function StatusBadge({ status }: { status: Status }) {
-  if (status === '—') return <span style={{ color: '#a0aec0', fontSize: 12, paddingRight: 10 }}>—</span>
+  if (status === '—') return <span style={{ color: '#5f6b7d', fontSize: 12, paddingRight: 10 }}>—</span>
   const isAlert = status === 'Infiltrate (L)' || status === 'Detected'
   const bgColor = isAlert ? '#fff5f5' : '#f0fff4'
   const textColor = isAlert ? '#c53030' : '#2f855a'
@@ -143,7 +144,7 @@ function StaffCard({ staff, index, onView }: { staff: StaffMember; index: number
           <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 20, fontWeight: 800, color: '#1f3151', lineHeight: 1.1, textTransform: 'uppercase' }}>{staff.name}</div>
           <span style={{ background: '#f1f5f9', color: '#4a5568', borderRadius: 999, padding: '4px 10px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0 }}>{staff.dept}</span>
         </div>
-        <div style={{ fontSize: 13, color: '#a0aec0', marginBottom: (staff.slaStatus === 'OVERDUE' || staff.slaStatus === 'NON_COMPLIANT') ? 10 : 20, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 13, color: '#5f6b7d', marginBottom: (staff.slaStatus === 'OVERDUE' || staff.slaStatus === 'NON_COMPLIANT') ? 10 : 20, lineHeight: 1.5 }}>
           {staff.id}<br/>{staff.role}
         </div>
         {(staff.slaStatus === 'OVERDUE' || staff.slaStatus === 'NON_COMPLIANT') && (
@@ -151,18 +152,18 @@ function StaffCard({ staff, index, onView }: { staff: StaffMember; index: number
         )}
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '10px 14px', marginBottom: 12 }}>
-          <span style={{ fontSize: 12, fontWeight: 800, color: '#718096', letterSpacing: '0.05em', textTransform: 'uppercase' }}>CHEST X-RAY:</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#5f6b7d', letterSpacing: '0.05em', textTransform: 'uppercase' }}>CHEST X-RAY:</span>
           <StatusBadge status={staff.xray} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '10px 14px', marginBottom: 24 }}>
-          <span style={{ fontSize: 12, fontWeight: 800, color: '#718096', letterSpacing: '0.05em', textTransform: 'uppercase' }}>GENEXPERT:</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: '#5f6b7d', letterSpacing: '0.05em', textTransform: 'uppercase' }}>GENEXPERT:</span>
           <StatusBadge status={staff.genexpert} />
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 40 }}>
           {staff.exam !== '—' ? (
             <>
-              <div style={{ fontSize: 12, color: '#a0aec0', lineHeight: 1.4 }}>
+              <div style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.4 }}>
                 Exam: <span style={{ color: '#1f3151', fontWeight: 800 }}>{examMonth}</span><br/><span style={{ color: '#1f3151', fontWeight: 800 }}>{examRest}</span>
               </div>
               <motion.button
@@ -175,7 +176,7 @@ function StaffCard({ staff, index, onView }: { staff: StaffMember; index: number
               </motion.button>
             </>
           ) : (
-            <div style={{ fontSize: 12, color: '#a0aec0' }}>—</div>
+            <div style={{ fontSize: 12, color: '#5f6b7d' }}>—</div>
           )}
         </div>
       </div>
@@ -203,7 +204,7 @@ function MobileStaffCard({ staff, index, onView }: { staff: StaffMember; index: 
         </div>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', lineHeight: 1.2 }}>{staff.name}</div>
-          <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{staff.id} • {staff.role}</div>
+          <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>{staff.id} • {staff.role}</div>
           {(staff.slaStatus === 'OVERDUE' || staff.slaStatus === 'NON_COMPLIANT') && (
             <div style={{ marginTop: 6 }}><SlaStatusBadge status={staff.slaStatus} /></div>
           )}
@@ -217,7 +218,7 @@ function MobileStaffCard({ staff, index, onView }: { staff: StaffMember; index: 
           if (f.status === '—') color = '#a0aec0'
           return (
             <div key={f.label} style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
-              <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{f.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 800, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{f.label}</div>
               <div style={{ fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase' }}>{f.status}</div>
             </div>
           )
@@ -234,242 +235,181 @@ function MobileStaffCard({ staff, index, onView }: { staff: StaffMember; index: 
   )
 }
 
-/** Annual-cycle progress as % of time elapsed between the last exam and the next
- * due date — a real derived value from the two dates the API already returns,
- * not a fabricated metric. Null when there's no exam yet to measure from, or
- * the window is degenerate (due date not after exam date). */
-function cycleProgress(examDate: string | null, dueDate: string): number | null {
-  if (!examDate) return null
-  const start = new Date(examDate).getTime()
-  const end = new Date(dueDate).getTime()
-  if (!(end > start)) return null
-  const pct = Math.round(((Date.now() - start) / (end - start)) * 100)
-  return Math.min(100, Math.max(0, pct))
+/** Backend shape from GET /me/documents (the owner's own history, including review outcome). */
+interface MyDocument {
+  id: string
+  docType: string
+  cxrResult: TrackerEntry['cxrResult']
+  genexpertResult: TrackerEntry['genexpertResult']
+  title: string | null
+  reviewStatus: 'PENDING' | 'APPROVED' | 'REJECTED'
+  uploadedAt: string
+  reviewedBy: string | null
+  rejectionReason: string | null
+  reviewNotes?: string | null
 }
 
-function daysUntil(dueDate: string): number {
-  const end = new Date(dueDate).setHours(0, 0, 0, 0)
-  const now = new Date().setHours(0, 0, 0, 0)
-  return Math.round((end - now) / 86400000)
+function documentTitle(doc: MyDocument) {
+  if (doc.title?.trim()) return doc.title.trim()
+  if (doc.docType === 'HEPB_TITER') return 'Hepatitis B Titer'
+  const hasCxr = doc.cxrResult !== 'NOT_APPLICABLE'
+  const hasGenexpert = doc.genexpertResult !== 'NOT_APPLICABLE'
+  if (hasCxr && hasGenexpert) return 'Chest X-Ray & GeneXpert Result'
+  if (hasCxr) return 'Chest X-Ray Result'
+  if (hasGenexpert) return 'GeneXpert Result'
+  return 'Laboratory Report'
 }
 
-function dueDateFootnote(days: number): string {
-  if (days > 0) return `Next requirement window opens in ${days} day${days === 1 ? '' : 's'}.`
-  if (days === 0) return 'Next requirement is due today.'
-  return `Next requirement is ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} overdue.`
+/** Documents have UUIDs, not a sequential number — a short, stable reference derived from the id
+ * gives staff something to quote to the TB DOTS Unit, like the mockup's "DOC-904". */
+const documentRef = (id: string) => `DOC-${id.replace(/-/g, '').slice(0, 6).toUpperCase()}`
+const categoryLabel = (docType: string) => (docType === 'HEPB_TITER' ? 'Hep B Titer' : 'APE Exam')
+const submittedOn = (iso: string) => new Date(iso).toLocaleDateString('en-CA')
+// Pending rows name the reviewing unit (as the mockup does); so do older reviewed rows that predate reviewer tracking.
+const verifiedBy = (doc: MyDocument) => (doc.reviewStatus === 'PENDING' ? 'TB DOTS Reviewer' : doc.reviewedBy ?? 'TB DOTS Reviewer')
+
+const historyStatus: Record<MyDocument['reviewStatus'], { label: string; bg: string; color: string; border: string }> = {
+  PENDING: { label: 'Pending Verification', bg: '#fef2c0', color: '#852202', border: '#fde68a' },
+  APPROVED: { label: 'Verified & Cleared', bg: '#e0f3e6', color: '#004b2b', border: '#bfe5cc' },
+  REJECTED: { label: 'Rejected', bg: '#fff1f0', color: '#b42318', border: '#fecdca' },
 }
 
-/** Desktop-only unified dashboard for STAFF's own record — replaces the old
- * StaffCard-in-a-grid layout (a single card stranded in a 3-column grid, mostly
- * empty background) with one full-width panel: header, stat row, cycle
- * progress, actions. Built directly from the TrackerEntry the API returns
- * (not the StaffMember shape StaffCard/MobileStaffCard use) since it needs
- * dueDate and the raw examDate for the progress calculation. */
-function MyComplianceDashboard({ record, onView, onUpload }: { record: TrackerEntry; onView: () => void; onUpload: () => void }) {
-  const initials = record.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-  const xray = toCxrStatus(record.cxrResult)
-  const genexpert = toGenexpertStatus(record.genexpertResult)
-  const hasExam = record.examDate !== null
-  const progress = cycleProgress(record.examDate, record.dueDate)
-  const due = daysUntil(record.dueDate)
-
-  const pill = record.clinicalStatus === 'CRITICAL'
-    ? { label: 'Critical — Review Required', color: '#feb2b2', bg: 'rgba(229,62,62,0.22)' }
-    : record.status === 'OVERDUE'
-    ? { label: 'Overdue', color: '#feb2b2', bg: 'rgba(229,62,62,0.22)' }
-    : record.status === 'NON_COMPLIANT'
-    ? { label: 'Non-Compliant', color: '#e2e8f0', bg: 'rgba(203,213,224,0.22)' }
-    : record.status === 'PENDING'
-    ? { label: 'Pending Review', color: '#f6e05e', bg: 'rgba(246,224,94,0.22)' }
-    : { label: 'Compliant This Cycle', color: '#4ade80', bg: 'rgba(74,222,128,0.22)' }
-
-  const statCells: { label: string; node: ReactNode }[] = [
-    { label: 'Chest X-Ray', node: <StatusBadge status={xray} /> },
-    { label: 'GeneXpert', node: <StatusBadge status={genexpert} /> },
-    { label: 'Exam Date', node: <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151' }}>{formatExamDate(record.examDate)}</span> },
-    {
-      label: 'Next Requirement Due',
-      node: (
-        <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151' }}>
-          {formatExamDate(record.dueDate)}
-          <span style={{ display: 'block', fontFamily: 'Public Sans,sans-serif', fontSize: 12, fontWeight: 600, color: '#a0aec0', marginTop: 3 }}>
-            {due > 0 ? `In ${due} day${due === 1 ? '' : 's'}` : due === 0 ? 'Due today' : `${Math.abs(due)} day${Math.abs(due) === 1 ? '' : 's'} overdue`}
-          </span>
-        </span>
-      ),
-    },
-  ]
-
+function StatusGlyph({ status, color }: { status: MyDocument['reviewStatus']; color: string }) {
   return (
-    <motion.div
-      custom={0}
-      variants={fadeRise}
-      initial="hidden"
-      animate="visible"
-      style={{ background: '#fff', borderRadius: 24, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', overflow: 'hidden' }}
-    >
-      <div style={{ background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', color: '#fff', padding: '34px 36px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, minWidth: 0 }}>
-          <div style={{ width: 58, height: 58, borderRadius: 14, background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 19, flexShrink: 0 }}>
-            {initials}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, textTransform: 'uppercase' }}>{record.fullName}</div>
-            <div style={{ fontSize: 13, color: '#cbd5e0', marginTop: 4 }}>{record.employeeId} • {record.jobTitle ?? '—'} • {record.department.name}</div>
-          </div>
-        </div>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: pill.bg, color: pill.color, borderRadius: 999, padding: '7px 16px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', flexShrink: 0 }}>
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: pill.color, display: 'inline-block', flexShrink: 0 }} />
-          {pill.label}
-        </span>
-      </div>
+    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <circle cx="8" cy="8" r="8" fill={color} />
+      {status === 'APPROVED' && <path d="M4.6 8.2 7 10.5l4.4-4.6" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+      {status === 'PENDING' && <path d="M8 4.3V8.3l2.6 1.4" stroke="#fff" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+      {status === 'REJECTED' && <path d="m5.5 5.5 5 5m0-5-5 5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" />}
+    </svg>
+  )
+}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        {statCells.map((s, i) => (
-          <div key={s.label} style={{ padding: '26px 28px', borderRight: i < statCells.length - 1 ? '1px solid #e2e8f0' : 'none', borderBottom: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>{s.label}</div>
-            {s.node}
+function HistoryStatusPill({ status }: { status: MyDocument['reviewStatus'] }) {
+  const s = historyStatus[status]
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, height: 28, padding: '0 12px 0 8px', borderRadius: 999, background: s.bg, color: s.color, border: `1px solid ${s.border}`, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+      <StatusGlyph status={status} color={s.color} />
+      {s.label}
+    </span>
+  )
+}
+
+const HISTORY_COLUMNS: { label: string; width: string; icon: ReactNode }[] = [
+  // Mockup proportions, except Status gets ~2.5% more so the widest pill still fits at 1024px.
+  { label: 'Document Title', width: '26.5%', icon: <FileText size={15} color="#788ba5" fill="#dbe3ee" /> },
+  { label: 'Category', width: '13.4%', icon: <Folder size={15} color="#788ba5" fill="#788ba5" /> },
+  { label: 'Submitted On', width: '16.4%', icon: <CalendarDays size={15} color="#788ba5" /> },
+  { label: 'Verified By', width: '21.7%', icon: <UserCheck size={15} color="#788ba5" /> },
+  { label: 'Status', width: '22%', icon: <ShieldCheck size={15} color="#788ba5" fill="#dbe3ee" /> },
+]
+
+/** Staff's "My Clearance & Logs": every document they've submitted and where its verification stands.
+ * Layout measured from the mockup at 1440 (4vw side margins, 54px header row, 75px rows). */
+function MySubmissionHistory({ documents, loading, onUpload }: { documents: MyDocument[]; loading: boolean; onUpload: () => void }) {
+  const empty = !loading && documents.length === 0
+  return (
+    <div className="sm:-mx-6 sm:-mt-6 lg:-mx-12 lg:-mt-12 sm:px-6 lg:px-[4vw]" style={{ paddingTop: 'clamp(0px, 2.3vw, 44px)', fontFamily: 'Poppins,sans-serif' }}>
+      <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible"
+        style={{ background: '#fff', borderRadius: 18, padding: '26px 30px', boxShadow: '0 4px 8px rgba(15,23,42,0.2)' }}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 28, padding: '0 16px 0 12px', borderRadius: 999, background: '#fef2c0', color: '#841f00', fontSize: 12, fontWeight: 600 }}>
+          <FileCheck size={14} strokeWidth={2.4} aria-hidden="true" /> Submission History
+        </span>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', lineHeight: 1.3, margin: '16px 0 0' }}>My Submitted Documents &amp; Verification Status</h1>
+        <p style={{ fontSize: 13, color: '#55667e', lineHeight: 1.5, margin: '4px 0 0' }}>Track the real-time status of health documents you have submitted to the TB DOTS Unit for verification.</p>
+      </motion.div>
+
+      {/* Laptop / desktop: the mockup's table. Below lg the Status column would be scrolled out of view,
+          so smaller screens get the card list instead; the minWidth is only a safety net. */}
+      <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" className="hidden lg:block"
+        style={{ marginTop: 24, background: '#fff', borderRadius: 16, border: '1px solid #e5e9f0', boxShadow: '0 4px 8px rgba(15,23,42,0.14)', overflow: 'hidden' }}
+      >
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+            <caption className="sr-only">Your submitted health documents and their verification status</caption>
+            <colgroup>{HISTORY_COLUMNS.map(c => <col key={c.label} style={{ width: c.width }} />)}</colgroup>
+            <thead>
+              <tr style={{ background: '#f4f7fb', height: 54 }}>
+                {HISTORY_COLUMNS.map((c, i) => (
+                  <th key={c.label} scope="col" style={{ textAlign: 'left', padding: i === 0 ? '0 12px 0 20px' : '0 12px', fontSize: 13, fontWeight: 600, color: '#1a2b41', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{c.icon}{c.label}</span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && [0, 1, 2].map(i => (
+                <tr key={i} style={{ height: 75, borderTop: '1px solid #eef1f5' }}>
+                  <td colSpan={5} style={{ padding: '0 27px' }}><div style={{ height: 14, width: `${60 - i * 12}%`, borderRadius: 6, background: '#eef1f5' }} /></td>
+                </tr>
+              ))}
+              {!loading && documents.map(doc => (
+                <tr key={doc.id} style={{ height: 75, borderTop: '1px solid #eef1f5' }}>
+                  <td style={{ padding: '12px 12px 12px 27px' }}>
+                    <div title={documentTitle(doc)} style={{ fontSize: 14, fontWeight: 600, color: '#111111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{documentTitle(doc)}</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 1, letterSpacing: '0.02em' }}>{documentRef(doc.id)}</div>
+                  </td>
+                  <td style={{ padding: '0 12px' }}>
+                    <span style={{ display: 'inline-block', background: '#eef3f8', color: '#262c38', borderRadius: 6, padding: '5px 16px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{categoryLabel(doc.docType)}</span>
+                  </td>
+                  <td style={{ padding: '0 12px', fontSize: 14, color: '#5f6368', whiteSpace: 'nowrap' }}>{submittedOn(doc.uploadedAt)}</td>
+                  <td style={{ padding: '0 12px', fontSize: 14, color: '#5f6368', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{verifiedBy(doc)}</td>
+                  <td style={{ padding: '12px 12px 12px 12px' }}>
+                    <HistoryStatusPill status={doc.reviewStatus} />
+                    {doc.reviewStatus === 'REJECTED' && doc.rejectionReason && (
+                      <div style={{ fontSize: 12, color: '#b42318', marginTop: 4, lineHeight: 1.35 }}>Reason: {doc.rejectionReason}</div>
+                    )}
+                    {doc.reviewStatus === 'APPROVED' && doc.reviewNotes && (
+                      <div style={{ fontSize: 12, color: '#4b5563', marginTop: 4, lineHeight: 1.35 }}>Reviewer note: {doc.reviewNotes}</div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {empty && <EmptyHistory onUpload={onUpload} />}
+      </motion.div>
+
+      {/* Phones and tablets: the same rows as cards (one column on phones, two on tablets). */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4 sm:mt-6 lg:hidden">
+        {loading && [0, 1].map(i => <div key={i} style={{ height: 96, borderRadius: 14, background: '#fff', border: '1px solid #e5e9f0' }} />)}
+        {!loading && documents.map(doc => (
+          <div key={doc.id} style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e9f0', padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'flex-start' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#111111' }}>{documentTitle(doc)}</div>
+                <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{documentRef(doc.id)} · {categoryLabel(doc.docType)}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 10 }}><HistoryStatusPill status={doc.reviewStatus} /></div>
+            {doc.reviewStatus === 'REJECTED' && doc.rejectionReason && (
+              <div style={{ fontSize: 12, color: '#b42318', marginTop: 6 }}>Reason: {doc.rejectionReason}</div>
+            )}
+            {doc.reviewStatus === 'APPROVED' && doc.reviewNotes && (
+              <div style={{ fontSize: 12, color: '#4b5563', marginTop: 6 }}>Reviewer note: {doc.reviewNotes}</div>
+            )}
+            <div style={{ fontSize: 12, color: '#5f6368', marginTop: 10 }}>Submitted {submittedOn(doc.uploadedAt)} · {verifiedBy(doc)}</div>
           </div>
         ))}
+        {empty && <div className="sm:col-span-2" style={{ background: '#fff', borderRadius: 14, border: '1px solid #e5e9f0' }}><EmptyHistory onUpload={onUpload} /></div>}
       </div>
-
-      {progress !== null && (
-        <div style={{ padding: '26px 32px', borderBottom: '1px solid #e2e8f0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 12 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Annual Cycle Progress</span>
-            <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#2f855a', flexShrink: 0 }}>{progress}%</span>
-          </div>
-          <div style={{ height: 10, background: '#f8fafc', borderRadius: 999, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(to right, #2f855a, #008d46)', borderRadius: 999 }} />
-          </div>
-          <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 10 }}>{dueDateFootnote(due)}</div>
-        </div>
-      )}
-
-      <div style={{ padding: '26px 32px', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-        {hasExam && (
-          <motion.button
-            onClick={onView}
-            whileHover={{ filter: 'brightness(1.1)' }}
-            whileTap={{ scale: 0.98 }}
-            style={{ flex: 1, minWidth: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#1f3151', color: '#fff', border: 'none', borderRadius: 12, padding: '17px 0', minHeight: 44, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', cursor: 'pointer' }}
-          >
-            View Official X-Ray PDF
-          </motion.button>
-        )}
-        <motion.button
-          onClick={onUpload}
-          whileHover={{ background: '#f8fafc' }}
-          whileTap={{ scale: 0.98 }}
-          style={{ flex: 1, minWidth: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#fff', color: '#1f3151', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: hasExam ? '15.5px 0' : '17px 0', minHeight: 44, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', cursor: 'pointer' }}
-        >
-          Upload New Result
-        </motion.button>
-      </div>
-    </motion.div>
+    </div>
   )
 }
 
-/** Mobile-native version of MyComplianceDashboard — same header/stats/progress/actions
- * shape, stacked instead of laid out in a wide header + 4-column row, and with the
- * action buttons stacked full-width instead of side by side (matches MobileStaffCard's
- * own stacked single "View Official X-Ray PDF" button convention). */
-function MyComplianceDashboardMobile({ record, onView, onUpload }: { record: TrackerEntry; onView: () => void; onUpload: () => void }) {
-  const initials = record.fullName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
-  const xray = toCxrStatus(record.cxrResult)
-  const genexpert = toGenexpertStatus(record.genexpertResult)
-  const hasExam = record.examDate !== null
-  const progress = cycleProgress(record.examDate, record.dueDate)
-  const due = daysUntil(record.dueDate)
-
-  const pill = record.clinicalStatus === 'CRITICAL'
-    ? { label: 'Critical', color: '#feb2b2', bg: 'rgba(229,62,62,0.22)' }
-    : record.status === 'OVERDUE'
-    ? { label: 'Overdue', color: '#feb2b2', bg: 'rgba(229,62,62,0.22)' }
-    : record.status === 'NON_COMPLIANT'
-    ? { label: 'Non-Compliant', color: '#e2e8f0', bg: 'rgba(203,213,224,0.22)' }
-    : record.status === 'PENDING'
-    ? { label: 'Pending', color: '#f6e05e', bg: 'rgba(246,224,94,0.22)' }
-    : { label: 'Compliant', color: '#4ade80', bg: 'rgba(74,222,128,0.22)' }
-
+function EmptyHistory({ onUpload }: { onUpload: () => void }) {
   return (
-    <motion.div
-      custom={1}
-      variants={fadeRise}
-      initial="hidden"
-      animate="visible"
-      style={{ background: '#fff', borderRadius: 20, boxShadow: '0 4px 12px rgba(0,0,0,0.05)', overflow: 'hidden' }}
-    >
-      <div style={{ background: 'linear-gradient(135deg, #1f3151 0%, #1c4b6e 100%)', color: '#fff', padding: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.14)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 14, flexShrink: 0 }}>
-            {initials}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, textTransform: 'uppercase', lineHeight: 1.2 }}>{record.fullName}</div>
-            <div style={{ fontSize: 12, color: '#cbd5e0', marginTop: 2 }}>{record.employeeId} • {record.jobTitle ?? '—'}</div>
-          </div>
-        </div>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: pill.bg, color: pill.color, borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: pill.color, display: 'inline-block', flexShrink: 0 }} />
-          {pill.label}
-        </span>
-      </div>
-
-      <div style={{ padding: 16 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-          <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Chest X-Ray</div>
-            <StatusBadge status={xray} />
-          </div>
-          <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>GeneXpert</div>
-            <StatusBadge status={genexpert} />
-          </div>
-          <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Exam Date</div>
-            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#1f3151' }}>{formatExamDate(record.examDate)}</div>
-          </div>
-          <div style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
-            <div style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Next Due</div>
-            <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#1f3151' }}>{formatExamDate(record.dueDate)}</div>
-          </div>
-        </div>
-
-        {progress !== null && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, gap: 12 }}>
-              <span style={{ fontSize: 12, fontWeight: 800, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cycle Progress</span>
-              <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, color: '#2f855a', flexShrink: 0 }}>{progress}%</span>
-            </div>
-            <div style={{ height: 8, background: '#f8fafc', borderRadius: 999, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${progress}%`, background: 'linear-gradient(to right, #2f855a, #008d46)', borderRadius: 999 }} />
-            </div>
-            <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 8 }}>{dueDateFootnote(due)}</div>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {hasExam && (
-            <button
-              onClick={onView}
-              style={{ width: '100%', background: '#1f3151', color: '#fff', border: 'none', borderRadius: 12, padding: 12, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer' }}
-            >
-              View Official X-Ray PDF
-            </button>
-          )}
-          <button
-            onClick={onUpload}
-            style={{ width: '100%', background: '#fff', color: '#1f3151', border: '1.5px solid #e2e8f0', borderRadius: 12, padding: 12, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase', cursor: 'pointer' }}
-          >
-            Upload New Result
-          </button>
-        </div>
-      </div>
-    </motion.div>
+    <div style={{ padding: '40px 20px', textAlign: 'center' }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>No submissions yet</div>
+      <div style={{ fontSize: 13, color: '#5f6b7d', marginTop: 4 }}>Documents you submit to the TB DOTS Unit will appear here with their verification status.</div>
+      <button onClick={onUpload} style={{ marginTop: 16, height: 40, padding: '0 22px', background: '#006042', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+        Submit Health Documents
+      </button>
+    </div>
   )
 }
-
 interface Department { id: string; name: string; code: string }
 
 const ALL_DEPARTMENTS = 'All Departments'
@@ -514,91 +454,12 @@ const adminStatusStyles: Record<AdminStatus, { bg: string; color: string }> = {
   'Non-Compliant': { bg: '#f1f5f9', color: '#4a5568' },
 }
 
-/** Desktop admin staff row — a direct scale-up of the mobile Staff Directory
- * row (avatar circle + name/dept/id + status badge), not a re-skin of
- * StaffCard's card-grid shape (colored top strip, centered avatar). Matching
- * staff's desktop *pattern* means reusing card/spacing conventions, not
- * copying a specific staff layout shape onto content mobile already renders
- * as a simple list — see Upload.tsx's Review Queue for the same correction. */
-function AdminStaffRow({ staff, index }: { staff: AdminStaffEntry; index: number }) {
-  const statusStyle = adminStatusStyles[staff.status]
-  return (
-    <motion.div
-      custom={index}
-      variants={fadeRise}
-      initial="hidden"
-      animate="visible"
-      style={{ display: 'flex', alignItems: 'center', gap: 16, padding: 16, borderRadius: 16, background: '#f8fafc', marginBottom: 12 }}
-    >
-      <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#1f3151', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 16, color: '#fff', flexShrink: 0 }}>
-        {staff.name[0]}
-      </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{staff.name}</div>
-        <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{staff.dept.toUpperCase()} • {staff.id}</div>
-      </div>
-      <span style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 999, padding: '6px 14px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>
-        {staff.status}
-      </span>
-    </motion.div>
-  )
-}
-
 const statusGuideRows: { label: string; bg: string; border: string; color: string; desc: string }[] = [
   { label: 'COMPLIANT', bg: '#e6f9ee', border: '#9ae6b4', color: '#008d46', desc: 'The staff has successfully submitted a negative CXR or GeneXpert result, and it has been officially signed/stamped by the TB Head. Clearance is valid for the current annual cycle.' },
   { label: 'CRITICAL', bg: '#fff5f5', border: '#feb2b2', color: '#c53030', desc: 'Requires immediate intervention. This means a positive GeneXpert result was uploaded or clinical symptoms were flagged. These personnel are restricted from hospital until further clinical review.' },
   { label: 'PENDING', bg: '#fffbea', border: '#f6e05e', color: '#b7791f', desc: 'Documents have been uploaded by the staff and are currently sitting in your "Review Queue". They are neither cleared nor flagged until you apply your digital signature or reject them.' },
   { label: 'NON-COMPLIANT', bg: '#f1f5f9', border: '#cbd5e0', color: '#4a5568', desc: 'Personnel who have not yet uploaded any documents, or whose submission were rejected by the TB Data Head due to errors (blurred images, expired results, etc.).' },
 ]
-
-function CustomDropdown({ value, onChange, options }: { value: string, onChange: (v: string) => void, options: string[] }) {
-  const [isOpen, setIsOpen] = useState(false)
-
-  useEffect(() => {
-    if (!isOpen) return
-    const close = () => setIsOpen(false)
-    document.addEventListener('click', close)
-    return () => document.removeEventListener('click', close)
-  }, [isOpen])
-
-  return (
-    <div className="w-full sm:w-60" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', minHeight: 44, border: 'none', borderRadius: 999, fontSize: 14, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', background: '#f8fafc', cursor: 'pointer', outline: 'none' }}
-      >
-        {value}
-        <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }} style={{ display: 'flex' }}>
-          <ChevronDown size={16} color="#a0aec0" />
-        </motion.div>
-      </button>
-
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.96 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-            style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 8, background: '#fff', borderRadius: 16, boxShadow: '0 12px 32px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0', padding: '8px 0', zIndex: 50, display: 'flex', flexDirection: 'column' }}
-          >
-            {options.map(opt => (
-              <button
-                key={opt}
-                onClick={() => { onChange(opt); setIsOpen(false) }}
-                style={{ width: '100%', padding: '12px 20px', minHeight: 44, border: 'none', background: 'transparent', color: value === opt ? '#008d46' : '#4a5568', fontSize: 14, fontFamily: 'Public Sans,sans-serif', textAlign: 'left', cursor: 'pointer', fontWeight: value === opt ? 600 : 400, transition: 'background 0.15s, color 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#1f3151' }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = value === opt ? '#008d46' : '#4a5568' }}
-              >
-                {opt}
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
 
 function apiErrorMessage(err: unknown, fallback: string) {
   if (err instanceof ApiError) return err.message || fallback
@@ -619,38 +480,19 @@ export default function Compliance() {
     api.get<Department[]>('/departments').then(setDepartments).catch(() => {})
   }, [])
 
-  const depts = [ALL_DEPARTMENTS, ...departments.map(d => d.name)]
   const mobileDeptFilters = [
     { label: 'All Units', value: ALL_DEPARTMENTS },
     ...departments.map(d => ({ label: toMobileChipLabel(d.name), value: d.name })),
   ]
 
   const [tracker, setTracker] = useState<TrackerEntry[]>([])
-  const [myRecord, setMyRecord] = useState<TrackerEntry | null>(null)
+  const [myDocuments, setMyDocuments] = useState<MyDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
-  const [refreshKey, setRefreshKey] = useState(0)
-  const [scanning, setScanning] = useState(false)
-  const [scanMessage, setScanMessage] = useState('')
 
   useEffect(() => {
     setPreciseRole(getPreciseRole())
   }, [])
-
-  const handleRunScan = async () => {
-    setScanning(true)
-    setScanMessage('')
-    try {
-      const result = await api.post<{ recordsProcessed: number; eventsEmitted: Record<string, number> }>('/monitoring/run-scan')
-      const totalEvents = Object.values(result.eventsEmitted).reduce((a, b) => a + b, 0)
-      setScanMessage(`Scanned ${result.recordsProcessed} records — ${totalEvents} new event${totalEvents === 1 ? '' : 's'}.`)
-      setRefreshKey(k => k + 1)
-    } catch (err) {
-      setScanMessage(apiErrorMessage(err, 'Scan failed. Please try again.'))
-    } finally {
-      setScanning(false)
-    }
-  }
 
   // Punch-list B: STAFF only ever sees their own dossier — the Tracker/Directory
   // (and department filtering) is gated to UNIT_HEAD/ADMIN at the API layer too.
@@ -662,9 +504,9 @@ export default function Compliance() {
       setLoading(true)
       setErrorMessage('')
       api
-        .get<TrackerEntry>('/me/compliance-summary')
-        .then((data) => { if (!cancelled) setMyRecord(data) })
-        .catch((err) => { if (!cancelled) setErrorMessage(apiErrorMessage(err, 'Could not load your record.')) })
+        .get<MyDocument[]>('/me/documents')
+        .then((data) => { if (!cancelled) setMyDocuments(data) })
+        .catch((err) => { if (!cancelled) setErrorMessage(apiErrorMessage(err, 'Could not load your submissions.')) })
         .finally(() => { if (!cancelled) setLoading(false) })
       return () => { cancelled = true }
     }
@@ -688,7 +530,7 @@ export default function Compliance() {
     }, 300)
 
     return () => { cancelled = true; clearTimeout(timeout) }
-  }, [preciseRole, search, dept, refreshKey])
+  }, [preciseRole, search, dept])
 
   const filtered = tracker.map(toStaffMember)
   const adminFiltered = tracker.map(toAdminStaffEntry)
@@ -704,39 +546,7 @@ export default function Compliance() {
       )}
 
       {preciseRole === 'STAFF' ? (
-        <>
-          {/* Mobile-native own-record view (phones, < sm) */}
-          <div className="sm:hidden">
-            <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 16 }}>
-              <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>My Compliance</h1>
-              <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Personal Pulmonary Record</div>
-            </motion.div>
-            {loading && <SkeletonCard height={180} />}
-            {!loading && myRecord && (
-              <MyComplianceDashboardMobile
-                record={myRecord}
-                onView={() => setSelectedStaff(toStaffMember(myRecord))}
-                onUpload={() => router.push('/upload')}
-              />
-            )}
-          </div>
-
-          {/* Tablet / desktop own-record view */}
-          <div className="hidden sm:block">
-            <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 32 }}>
-              <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>My Compliance Record</h1>
-              <p style={{ fontSize: 14, color: '#718096', marginBottom: 0 }}>Your personal pulmonary surveillance status for the current annual cycle.</p>
-            </motion.div>
-            {loading && <SkeletonCard height={220} />}
-            {!loading && myRecord && (
-              <MyComplianceDashboard
-                record={myRecord}
-                onView={() => setSelectedStaff(toStaffMember(myRecord))}
-                onUpload={() => router.push('/upload')}
-              />
-            )}
-          </div>
-        </>
+        <MySubmissionHistory documents={myDocuments} loading={loading} onUpload={() => router.push('/upload')} />
       ) : (
         <>
           {/* Mobile-native tracker (phones, < sm) */}
@@ -746,9 +556,9 @@ export default function Compliance() {
                 <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                   <div>
                     <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Staff Directory</h1>
-                    <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Real-Time Personnel Status</div>
+                    <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Real-Time Personnel Status</div>
                   </div>
-                  <button onClick={() => setShowStatusGuide(true)} aria-label="Help" style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                  <button onClick={() => setShowStatusGuide(true)} aria-label="Help" style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5f6b7d', flexShrink: 0 }}>
                     <HelpCircle size={17} />
                   </button>
                 </motion.div>
@@ -788,7 +598,7 @@ export default function Compliance() {
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{s.name}</div>
-                        <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{s.dept.toUpperCase()} • {s.id}</div>
+                        <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>{s.dept.toUpperCase()} • {s.id}</div>
                       </div>
                       <span style={{ background: statusStyle.bg, color: statusStyle.color, borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', flexShrink: 0, whiteSpace: 'nowrap' }}>
                         {s.status}
@@ -797,14 +607,14 @@ export default function Compliance() {
                   )
                 })}
                 {!loading && adminFiltered.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '40px 0', color: '#a0aec0', fontSize: 13 }}>No results found.</div>
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: '#5f6b7d', fontSize: 13 }}>No results found.</div>
                 )}
               </>
             ) : (
               <>
                 <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 16 }}>
                   <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Tracker</h1>
-                  <div style={{ fontSize: 12, color: '#a0aec0', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Department Database</div>
+                  <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Department Database</div>
                 </motion.div>
 
                 {loading && [0, 1, 2, 3, 4].map(i => <SkeletonListRow key={i} />)}
@@ -812,7 +622,7 @@ export default function Compliance() {
                   <MobileStaffCard key={staff.id + staff.name} staff={staff} index={i + 1} onView={() => setSelectedStaff(staff)} />
                 ))}
                 {!loading && filtered.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '40px 0', color: '#a0aec0', fontSize: 13 }}>No results found.</div>
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: '#5f6b7d', fontSize: 13 }}>No results found.</div>
                 )}
               </>
             )}
@@ -821,58 +631,12 @@ export default function Compliance() {
           {/* Tablet / desktop tracker */}
           <div className="hidden sm:block">
             {preciseRole === 'ADMIN' ? (
-              <>
-                <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
-                  <div>
-                    <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>Staff Directory</h1>
-                    <p style={{ fontSize: 14, color: '#718096', marginBottom: 0 }}>Real-time hospital-wide personnel compliance status across clinical sectors.</p>
-                  </div>
-                  <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
-                    <button
-                      onClick={handleRunScan}
-                      disabled={scanning}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#1f3151', border: 'none', borderRadius: 999, padding: '10px 18px', minHeight: 44, cursor: scanning ? 'default' : 'pointer', color: '#fff', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', opacity: scanning ? 0.75 : 1 }}
-                    >
-                      {scanning ? 'Scanning…' : 'Run Compliance Scan'}
-                    </button>
-                    <button onClick={() => setShowStatusGuide(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 999, padding: '10px 18px', minHeight: 44, cursor: 'pointer', color: '#4a5568', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-                      <HelpCircle size={16} /> Status Guide
-                    </button>
-                  </div>
-                </motion.div>
-                {scanMessage && (
-                  <motion.p initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#4a5568', marginTop: -24, marginBottom: 24 }}>
-                    {scanMessage}
-                  </motion.p>
-                )}
-
-                <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 rounded-3xl sm:rounded-full" style={{ marginBottom: 32, background: '#fff', padding: '16px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.05)' }}>
-                  <div className="w-full sm:flex-1" style={{ position: 'relative' }}>
-                    <Search size={16} color="#a0aec0" style={{ position: 'absolute', left: 20, top: '50%', transform: 'translateY(-50%)' }} />
-                    <input
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      placeholder="Search by name or Employee ID.."
-                      style={{ width: '100%', padding: '14px 20px 14px 48px', border: 'none', borderRadius: 999, fontSize: 14, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', background: '#f8fafc', outline: 'none' }}
-                    />
-                  </div>
-                  <CustomDropdown value={dept} onChange={setDept} options={depts} />
-                </motion.div>
-
-                <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 24, padding: 32, boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
-                  <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#1f3151', marginBottom: 24 }}>STAFF DIRECTORY</div>
-                  {loading && [0, 1, 2, 3, 4, 5].map(i => <SkeletonListRow key={i} />)}
-                  {!loading && adminFiltered.map((staff, i) => <AdminStaffRow key={staff.id + staff.name} staff={staff} index={i} />)}
-                  {!loading && adminFiltered.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '60px 0', color: '#a0aec0', fontSize: 14 }}>No results found.</div>
-                  )}
-                </motion.div>
-              </>
+              <ModulesRegistry />
             ) : (
               <>
                 <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ marginBottom: 32 }}>
                   <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 26, fontWeight: 800, color: '#1f3151', marginBottom: 4 }}>Staff Pulmonary Registry</h1>
-                  <p style={{ fontSize: 14, color: '#718096', marginBottom: 0 }}>Filter, inspect, and evaluate surveillance compliance status of personnel in your department.</p>
+                  <p style={{ fontSize: 14, color: '#5f6b7d', marginBottom: 0 }}>Filter, inspect, and evaluate surveillance compliance status of personnel in your department.</p>
                 </motion.div>
 
                 <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 rounded-3xl sm:rounded-full" style={{ marginBottom: 32, background: '#fff', padding: '16px 20px', boxShadow: '0 4px 16px rgba(0,0,0,0.05)' }}>
@@ -928,7 +692,7 @@ export default function Compliance() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', letterSpacing: '0.02em', textTransform: 'uppercase' }}>Staff Record</span>
-                <button onClick={() => setSelectedStaff(null)} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                <button onClick={() => setSelectedStaff(null)} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5f6b7d', flexShrink: 0 }}>
                   <X size={14} />
                 </button>
               </div>
@@ -939,7 +703,7 @@ export default function Compliance() {
                 </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedStaff.name}</div>
-                  <div style={{ fontSize: 12, color: '#a0aec0', marginTop: 2 }}>{selectedStaff.id} • {selectedStaff.role}</div>
+                  <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>{selectedStaff.id} • {selectedStaff.role}</div>
                 </div>
               </div>
 
@@ -952,17 +716,17 @@ export default function Compliance() {
                   const color = f.status === '—' ? '#a0aec0' : isAlert ? '#c53030' : '#2f855a'
                   return (
                     <div key={f.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '12px 14px' }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{f.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{f.label}</span>
                       <span style={{ fontSize: 12, fontWeight: 800, color, textTransform: 'uppercase' }}>{f.status}</span>
                     </div>
                   )
                 })}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '12px 14px' }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Department</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Department</span>
                   <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedStaff.dept}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '12px 14px' }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#718096', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Last Exam Date</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Last Exam Date</span>
                   <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedStaff.exam !== '—' ? selectedStaff.exam.replace(' ', '. ') : '—'}</span>
                 </div>
               </div>
@@ -985,7 +749,7 @@ export default function Compliance() {
               onClick={e => e.stopPropagation()}
             >
               <div style={{ background: '#1c2538', padding: '28px 32px' }}>
-                <button onClick={() => setSelectedStaff(null)} style={{ position: 'absolute', top: 16, right: 16, width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#a0aec0' }}>
+                <button onClick={() => setSelectedStaff(null)} style={{ position: 'absolute', top: 16, right: 16, width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#5f6b7d' }}>
                   <X size={20} />
                 </button>
                 <div style={{ fontSize: 12, fontWeight: 800, color: '#4ade80', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
@@ -1003,7 +767,7 @@ export default function Compliance() {
                   </div>
                   <div>
                     <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 18, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', marginBottom: 2 }}>{selectedStaff.name}</div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#a0aec0', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{selectedStaff.id} • {selectedStaff.role}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{selectedStaff.id} • {selectedStaff.role}</div>
                   </div>
                 </div>
 
@@ -1011,19 +775,19 @@ export default function Compliance() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginBottom: 32 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#a0aec0', letterSpacing: '0.05em', textTransform: 'uppercase' }}>CHEST X-RAY:</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6b7d', letterSpacing: '0.05em', textTransform: 'uppercase' }}>CHEST X-RAY:</span>
                     <StatusBadge status={selectedStaff.xray} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#a0aec0', letterSpacing: '0.05em', textTransform: 'uppercase' }}>GENEXPERT:</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6b7d', letterSpacing: '0.05em', textTransform: 'uppercase' }}>GENEXPERT:</span>
                     <StatusBadge status={selectedStaff.genexpert} />
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#a0aec0', letterSpacing: '0.05em', textTransform: 'uppercase' }}>DEPARTMENT:</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6b7d', letterSpacing: '0.05em', textTransform: 'uppercase' }}>DEPARTMENT:</span>
                     <span style={{ background: '#e2e8f0', color: '#1f3151', borderRadius: 999, padding: '4px 12px', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{selectedStaff.dept}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#a0aec0', letterSpacing: '0.05em', textTransform: 'uppercase' }}>LAST EXAM DATE:</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6b7d', letterSpacing: '0.05em', textTransform: 'uppercase' }}>LAST EXAM DATE:</span>
                     <span style={{ fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase' }}>{selectedStaff.exam !== '—' ? selectedStaff.exam.replace(' ', '. ') : '—'}</span>
                   </div>
                 </div>
@@ -1040,7 +804,7 @@ export default function Compliance() {
                     onClick={() => setSelectedStaff(null)}
                     whileHover={{ background: '#e2e8f0' }}
                     whileTap={{ scale: 0.98 }}
-                    style={{ width: '100%', padding: '14px', background: '#f8fafc', color: '#718096', border: 'none', borderRadius: 12, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', transition: 'background 0.2s' }}
+                    style={{ width: '100%', padding: '14px', background: '#f8fafc', color: '#5f6b7d', border: 'none', borderRadius: 12, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', cursor: 'pointer', transition: 'background 0.2s' }}
                   >
                     CANCEL
                   </motion.button>
@@ -1071,7 +835,7 @@ export default function Compliance() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', letterSpacing: '0.02em' }}>STATUS DIFFERENCE GUIDE</span>
-                <button onClick={() => setShowStatusGuide(false)} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a0aec0', flexShrink: 0 }}>
+                <button onClick={() => setShowStatusGuide(false)} style={{ width: 44, height: 44, borderRadius: '50%', background: '#f1f5f9', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#5f6b7d', flexShrink: 0 }}>
                   <X size={14} />
                 </button>
               </div>

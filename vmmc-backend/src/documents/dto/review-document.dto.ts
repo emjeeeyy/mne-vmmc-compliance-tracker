@@ -1,5 +1,5 @@
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class ReviewDocumentDto {
   @ApiProperty({ enum: ['approve', 'reject'] })
@@ -11,6 +11,12 @@ export class ReviewDocumentDto {
   @IsString()
   @MinLength(1)
   reason?: string;
+
+  @ApiPropertyOptional({ description: 'Reviewer findings recorded with an approval (optional).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
 
   @ApiPropertyOptional({ description: 'Required when action is "approve" — the admin\'s digital_signatures id.' })
   @IsOptional()

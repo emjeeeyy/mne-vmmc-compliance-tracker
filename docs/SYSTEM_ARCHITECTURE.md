@@ -36,6 +36,83 @@ They are **fully independent deployable units** connected by exactly one contrac
                                                                                           └──────────┘
 ```
 
+### System Tree
+
+This is the current runtime map. The frontend and backend are independent applications; the REST API is their only source-code boundary. The browser never connects directly to Supabase.
+
+```mermaid
+flowchart TD
+  person[Staff / Unit Head / Admin] --> browser[Browser]
+
+  subgraph frontend["vmmc-frontend: Next.js App Router"]
+    browser --> routes[Public routes: login, signup, forgot password]
+    browser --> privacy[Public privacy notice route]
+    browser --> cookieNotice[Global essential-cookie notice]
+    browser --> protected[Protected routes: dashboard, compliance, upload, profile, notifications]
+    protected --> uiGuard[useAuthGuard checks the non-secret UI session shell]
+    routes --> screens[Screen components in src/screens]
+    privacy --> privacyPage[Data-use and session-cookie details]
+    uiGuard --> screens
+    screens --> apiClient[Shared API client: timeout, retry, JSON, credentials include]
+  end
+
+  subgraph backend["vmmc-backend: NestJS REST API"]
+    apiClient -->|HTTP /api| entry[main.ts: Helmet, CORS, validation, exception filter]
+    entry --> guards[Auth and role guards; audit interceptor]
+    guards --> controllers[Feature controllers]
+    controllers --> services[Feature services]
+    services --> supabaseClient[Supabase service]
+  end
+
+  subgraph features["Backend feature areas"]
+    controllers --> auth[Auth: login, OTP, signup, password reset]
+    controllers --> records[Compliance, documents, signatures, tracking]
+    controllers --> selfserve[Profile, departments, dashboards, reports, registry]
+    controllers --> operations[Change requests, audit trail, health]
+  end
+
+  subgraph platform["Supabase platform"]
+    supabaseClient --> authStore[Supabase Auth]
+    supabaseClient --> database[(Postgres + RLS)]
+    supabaseClient --> storage[Private document storage]
+  end
+
+  subgraph monitoring["Monitoring and Event Management"]
+    schedule[Daily Asia/Manila scan or admin scan] --> monitor[MonitoringService]
+    monitor --> classifier[EventClassifierService]
+    services -->|Screening review and record changes| classifier
+    classifier --> database
+    classifier --> dispatcher[NotificationDispatcherService]
+    dispatcher --> inApp[In-app notification]
+    dispatcher --> email[Email: Brevo HTTPS]
+    dispatcher --> sms[SMS: Semaphore HTTPS]
+    dispatcher --> notificationLog[Persist channel outcome]
+    inApp --> database
+    email --> notificationLog
+    sms --> notificationLog
+    classifier --> escalation[Exception escalation to unit head]
+    escalation --> database
+  end
+
+  authStore -. validates the HttpOnly session cookie .-> guards
+```
+
+```mermaid
+flowchart TD
+  login[Employee ID + password] --> twoFactor{2FA enabled?}
+  twoFactor -->|Yes| otp[Email OTP challenge]
+  otp -->|Verified| session[Backend sets HttpOnly vmmc_session cookie]
+  twoFactor -->|No| session
+  session --> passwordChange{Must change initial password?}
+  passwordChange -->|Yes| change[Required first-login password screen]
+  change --> dashboard[Dashboard]
+  passwordChange -->|No| dashboard
+  dashboard --> apiCalls[Protected API calls include cookie]
+  apiCalls --> serverCheck[Backend validates token and role]
+```
+
+At the OTP challenge the screen offers **Resend code** (30-second cooldown). It repeats `POST /auth/login` with the Employee ID, portal and the password the screen still holds, so a resend always requires the password and the backend needs no new endpoint. Each call stores a new `login_otps` row and `verify-login-otp` only checks the newest unconsumed one, so the newest email is the only one that works. Each new code has its own budget of 5 wrong guesses; the only request limit is the global throttle (120 per minute), so a per-account limit on how often a login code can be issued is a known, unbuilt hardening step (`HANDOFF.md` §6).
+
 **Local dev, both repos running together:**
 ```bash
 # one command from the repo root (see package.json) — runs both via `concurrently`
@@ -60,7 +137,7 @@ The backend's `CORS_ORIGIN` env var must match the frontend's actual origin, and
 
 The clearest way to actually understand how the two halves fit together is to trace one real user action all the way through both layers. Take the highest-stakes one: **an admin approves a document that turns out to be a positive result.**
 
-1. **Frontend (`Upload.tsx`, admin's Review Queue):** admin clicks Approve on a pending document, with their saved digital signature attached. `api.patch('/documents/:id/review', { action: 'approve', signatureId })` — the shared API client (frontend docs §5) attaches the bearer token automatically.
+1. **Frontend (`Upload.tsx`, admin's Review Queue):** admin clicks Approve on a pending document, with their saved digital signature attached. `api.patch('/documents/:id/review', { action: 'approve', signatureId })` — the shared API client (frontend docs §5) sends the request with `credentials: 'include'`, so the browser attaches the HttpOnly session cookie automatically.
 2. **Backend, `SupabaseAuthGuard`:** verifies the token by calling `supabase.auth.getUser(token)` (this project uses asymmetric ES256 signing keys, so there's no local secret to verify against — see backend docs §4), attaches the caller's `EmployeeContext` to the request.
 3. **Backend, `RolesGuard`:** confirms the caller is ADMIN.
 4. **Backend, `DocumentsService.review()`:** validates the signature belongs to this admin, marks the document `APPROVED`, links it to the employee's current-cycle `compliance_records` row, and — **synchronously, in the same request** — calls `EventClassifierService.classify()` on that compliance record.
@@ -189,7 +266,7 @@ An eleventh pass closed out the last item from the Aug 31 feedback batch worth b
 
 A twelfth pass tackled the last item from the same Aug 31 batch that had a genuinely unresolvable literal reading: "reduce the upperboard (protecting those who care) as background or streamline as compact welcome bar." A thorough search — live screens, every source file, and the original Figma design-spec imports — turned up zero matches for "protecting those who care" anywhere in the codebase, confirming it was never existing text to locate. Read instead as a suggested tagline for a redesigned header rather than a location, with "streamline as compact welcome bar" taken as the actionable half of the two alternatives offered. Applied to `Layout.tsx`'s persistent top bar — the one header present on every single screen, the closest match for "upperboard" in a system with no other persistent chrome. Height trimmed 68px→60px; the right-side institutional block ("Veterans Memorial Medical Center" / "Admin Management Portal") — which duplicated context already visible in the left branding and the profile pill's own role label — replaced with a compact "Welcome back, {first name}" greeting; the left branding's second line (the compliance-registry tagline) dropped, collapsing it to one line. Verified visually at three widths (1280px, 800px tablet, and confirming the `hidden lg:block` welcome text degrades gracefully rather than crowding the bar at narrower widths) plus a full `/verify` re-run (19/19 frontend unit, 16/16 e2e) after. Flagged clearly in the handoff doc that this is an interpretation of ambiguous feedback, not a confirmed match to adviser intent — the change is isolated to one component and cheap to revisit if wrong.
 
-A thirteenth pass closed out the PII information index, the last Aug 31 feedback item deferred at kickoff pending a scope decision: a downloadable CSV report matching the app's three existing reports, or a real on-screen table like the feedback's own word "table" suggests. The user chose the on-screen table. New `PiiIndex.tsx` screen at `/pii-index`, its own new 5th entry in both admin nav arrays (desktop sidebar and mobile bottom tab, which turned out to have room for a fifth icon without crowding), and a new `GET /reports/pii-index` endpoint living in the existing `reports/` module rather than a whole new one, since it's fundamentally the same shape as the other three reports — just ADMIN-only instead of UNIT_HEAD-inclusive, given it's a hospital-wide personal-data registry rather than department-scoped compliance figures (see backend doc §4). `employmentType` reuses `parseEmploymentTypeFromEmployeeId()` rather than adding a stored column, keeping one source of truth for what an employee ID format means. Verified live end to end: real ADMIN login sees all 23 active employees with correct COS/Permanent badges; search-filtering by department narrows correctly; CSV export produces a real downloadable file with matching headers and row count (confirmed via Playwright's actual download event, not just a click with no verification of output); a real STAFF login hitting the route directly sees a clean "Admin access only" message client-side rather than a raw 403, and the backend independently rejects the same request with a 403 if attempted directly. Full sweep after: 19/19 frontend unit tests, 16/16 e2e.
+A thirteenth pass closed out the PII information index, the last Aug 31 feedback item deferred at kickoff pending a scope decision: a downloadable CSV report matching the app's three existing reports, or a real on-screen table like the feedback's own word "table" suggests. The user chose the on-screen table. New `PiiIndex.tsx` screen at `/pii-index`, its own new 5th entry in both admin nav arrays (desktop sidebar and mobile bottom tab, which turned out to have room for a fifth icon without crowding), and a new `GET /reports/pii-index` endpoint living in the existing `reports/` module rather than a whole new one, since it's fundamentally the same shape as the other three reports — just ADMIN-only instead of UNIT_HEAD-inclusive, given it's a hospital-wide personal-data registry rather than department-scoped compliance figures (see backend doc §4). `employmentType` reuses `parseEmploymentTypeFromEmployeeId()` rather than adding a stored column, keeping one source of truth for what an employee ID format means. Verified live end to end: real ADMIN login sees all 23 active employees with correct COS/Permanent badges; search-filtering by department narrows correctly; CSV export produces a real downloadable file with matching headers and row count (confirmed via Playwright's actual download event, not just a click with no verification of output); a real STAFF login hitting the route directly sees a clean "Admin access only" message client-side rather than a raw 403, and the backend independently rejects the same request with a 403 if attempted directly. Full sweep after: 19/19 frontend unit tests, 16/16 e2e. *(The on-screen PII table was later removed from the UI at the user's request, see `PROGRESS_REPORT_3.md` Part R; the backend endpoint remains.)*
 
 A fourteenth pass covered three user-directed threads: a redesign of STAFF's own "My Compliance Record" from a small card stranded in an otherwise-empty grid into one unified dashboard panel (desktop + mobile, with a real Annual Cycle Progress bar computed client-side from actual exam/due dates, not a stored field — see frontend doc §7); a full audit of every real email the backend sends, ending in 12 designed HTML templates and real `nodemailer` HTML wiring replacing plain text everywhere, catching a genuine pre-existing gap along the way (every M&E email shared one identical subject line regardless of what happened — see backend doc §6); and three successive rounds of making the Activity Logs feed "actually accurate," which turned into real bug-hunting each time a fix only partially solved it (write-ups: backend doc §9, sixth through eighth "real bug" callouts). The common thread across all three: a feature that *looks* finished — renders, shows real data, passes a glance — can still misrepresent what's actually true (a green status strip only ever tracking clinical risk, not SLA timeline; an activity feed showing things the user never did) until someone actually traces the data it's built from back to its source.
 

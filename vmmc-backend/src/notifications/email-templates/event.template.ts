@@ -49,6 +49,18 @@ const SUBTYPE_CONTENT: Record<string, SubtypeContent> = {
     ],
     cta: (p) => ({ label: 'Upload Your Results', href: `${p.appBaseUrl}/upload` }),
   },
+  MANUAL_REMINDER: {
+    subject: 'Reminder from the VMMC TB DOTS Unit',
+    tier: 'exception',
+    badgeLabel: 'Follow-up',
+    headline: 'The TB DOTS Unit is following up on your clearance',
+    rows: (p) => [
+      { label: 'Employee', value: p.employeeId },
+      { label: 'Deadline', value: p.dueDate ? formatDate(p.dueDate) : formatDate(p.detectedAt), emphasis: 'danger' },
+      { label: 'Reminder Sent', value: formatDate(p.detectedAt) },
+    ],
+    cta: (p) => ({ label: 'Upload Your Results', href: `${p.appBaseUrl}/upload` }),
+  },
   WEEKLY_REMINDER: {
     subject: 'Your VMMC clearance is still pending',
     tier: 'warning',

@@ -11,7 +11,8 @@ export type EventSubtype =
   | 'CLINICAL_ALERT'
   | 'PEP_FOLLOWUP_MISSED'
   | 'IMMUNIZATION_OVERDUE'
-  | 'DOCUMENT_REJECTED';
+  | 'DOCUMENT_REJECTED'
+  | 'MANUAL_REMINDER';
 
 export interface ComplianceRecordRow {
   id: string;

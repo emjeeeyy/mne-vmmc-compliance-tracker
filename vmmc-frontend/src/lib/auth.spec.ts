@@ -26,4 +26,10 @@ describe('getInitials', () => {
   it('doubles the first letter for a single-word name (known behavior, not a bug fix)', () => {
     expect(getInitials('Cher')).toBe('CC')
   })
+
+  it('ignores credentials after a comma, so "RN"/"MD" never become the last initial', () => {
+    expect(getInitials('Maria Santos, RN')).toBe('MS')
+    expect(getInitials('Juan Dela Cruz, RN')).toBe('JC')
+    expect(getInitials('Ana Reyes, MD, FPCP')).toBe('AR')
+  })
 })

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { NotificationDispatcherService } from '../notifications/notification-dispatcher.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { ImmunizationRow } from '../tracking/immunizations.service';
@@ -6,6 +6,7 @@ import { PepLogRow } from '../tracking/pep-logs.service';
 import { ComplianceRecordRow, EventSubtype, EventType } from './types';
 
 const WEEKLY_REMINDER_INTERVAL_DAYS = 7;
+const MANUAL_REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 interface ApprovedDocument {
   id: string;
@@ -35,6 +36,42 @@ export class EventClassifierService {
     private readonly supabaseService: SupabaseService,
     private readonly notificationDispatcherService: NotificationDispatcherService,
   ) {}
+
+  /** Admin-triggered "Send Reminder" from the dashboard's follow-up table. Goes through the same
+   * event -> notification pipeline as the automatic reminders (in-app + SMS + email), and is limited
+   * to one per record per 24 hours so the button can't be used to spam someone. */
+  async sendManualReminder(recordId: string): Promise<{ sentAt: string }> {
+    const client = this.supabaseService.getClient();
+    const { data: record } = await client
+      .from('compliance_records')
+      .select('id, employee_id, cycle_year, birthday_date, window_open_date, due_date, status, clinical_status')
+      .eq('id', recordId)
+      .maybeSingle<ComplianceRecordRow>();
+    if (!record) throw new NotFoundException('Compliance record not found.');
+    if (record.status === 'COMPLIANT') throw new BadRequestException('This person is already cleared for the current cycle.');
+
+    const since = new Date(Date.now() - MANUAL_REMINDER_COOLDOWN_MS).toISOString();
+    const { data: recent } = await client
+      .from('events')
+      .select('id')
+      .eq('compliance_record_id', record.id)
+      .eq('event_subtype', 'MANUAL_REMINDER')
+      .gte('detected_at', since)
+      .limit(1);
+    if (recent && recent.length > 0) {
+      throw new ConflictException('A reminder was already sent to this person in the last 24 hours.');
+    }
+
+    const sent = await this.emit(
+      record,
+      'WARNING',
+      'MANUAL_REMINDER',
+      1,
+      'Manual reminder sent by the TB DOTS Unit: annual clearance overdue.',
+    );
+    if (!sent) throw new BadRequestException('The reminder could not be recorded. Please try again.');
+    return { sentAt: new Date().toISOString() };
+  }
 
   async classify(record: ComplianceRecordRow, today: Date): Promise<EventSubtype[]> {
     if (record.status === 'COMPLIANT') return [];
@@ -274,9 +311,10 @@ export class EventClassifierService {
 
     if (error) {
       this.logger.error(`Failed to emit ${subtype} for record ${record.id}: ${error.message}`);
-      return;
+      return false;
     }
 
     await this.notificationDispatcherService.handleEvent(data);
+    return true;
   }
 }

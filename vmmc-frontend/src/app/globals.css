@@ -50,3 +50,39 @@ h1, h2, h3, h4, h5, h6 {
 * {
   box-sizing: border-box;
 }
+
+/* Printing a certificate or record: the modal is portaled to <body> as `.print-portal`, so printing just
+   means hiding everything else and letting the sheet flow onto the page (the app shell is a fixed-height,
+   overflow-hidden box, which would otherwise cut the print off at one screen). */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+  body > *:not(.print-portal) {
+    display: none !important;
+  }
+  .print-portal {
+    position: static !important;
+    display: block !important;
+    background: none !important;
+    padding: 0 !important;
+    backdrop-filter: none !important;
+  }
+  .print-dialog {
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .print-sheet {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    break-inside: avoid;
+  }
+}

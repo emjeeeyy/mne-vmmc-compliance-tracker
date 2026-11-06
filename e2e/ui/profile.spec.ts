@@ -21,4 +21,13 @@ test.describe('Profile identity', () => {
     await expect(visibleText(page, TEST_ACCOUNTS.admin.fullName)).toBeVisible()
     await expect(page.getByText('Dr. Arturo', { exact: false })).toHaveCount(0)
   })
+
+  test('admin Profile shows the system-wide audit trail with real rows', async ({ page }) => {
+    await login(page, { ...TEST_ACCOUNTS.admin, portal: 'admin' })
+    await page.goto('/profile')
+
+    await expect(visibleText(page, /system activity & audit trail/i)).toBeVisible()
+    // A row rendered with a real employee ID proves the /audit-trail fetch resolved, not just the page shell.
+    await expect(visibleText(page, /VMMC-\d{2}-\d{4}/)).toBeVisible()
+  })
 })

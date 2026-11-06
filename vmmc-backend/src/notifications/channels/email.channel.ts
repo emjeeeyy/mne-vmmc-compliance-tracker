@@ -12,8 +12,8 @@ async function sleep(ms: number) {
 
 /**
  * Sends via Brevo's HTTP API (plain HTTPS, not SMTP) when BREVO_API_KEY/EMAIL_FROM are
- * configured; otherwise logs what would have been sent so the flow is demoable at zero
- * cost. HTTP instead of raw SMTP deliberately: Railway's outbound network couldn't
+ * configured; otherwise returns LOGGED without exposing message contents in logs. HTTP
+ * instead of raw SMTP deliberately: Railway's outbound network couldn't
  * reliably reach Gmail's SMTP port at all (confirmed live — ENETUNREACH on a random
  * IPv6 pick, then a straight connection timeout even forcing IPv4), while a plain
  * HTTPS POST has none of that risk — same reasoning SmsChannel already applies to
@@ -33,7 +33,7 @@ export class EmailChannel {
     const apiKey = this.configService.get<string>('BREVO_API_KEY');
     const fromAddress = this.configService.get<string>('EMAIL_FROM');
     if (!apiKey || !fromAddress) {
-      this.logger.log(`[DEV EMAIL] to ${to}: ${subject} — ${message}`);
+      this.logger.warn('Email delivery is disabled. Configure BREVO_API_KEY and EMAIL_FROM.');
       return { status: 'LOGGED', providerRef: null, retryCount: 0 };
     }
 

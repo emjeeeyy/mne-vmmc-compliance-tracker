@@ -1,6 +1,6 @@
 # VMMC TB DOTS — Frontend Architecture
 
-This document exists so the team can open this repo cold and actually understand *why* it's built the way it is — not just where the files are. Read it top to bottom once, then use it as a reference. Pair it with [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md) for the whole-system view and [`BACKEND_ARCHITECTURE.md`](BACKEND_ARCHITECTURE.md) for the API this UI talks to. If you're making a visual/interaction change, [`FRONTEND_STANDARDS.md`](../vmmc%20frontend/FRONTEND_STANDARDS.md) is the actual conventions rulebook — this document is about understanding the app, that one is about extending it correctly.
+This document exists so the team can open this repo cold and actually understand *why* it's built the way it is — not just where the files are. Read it top to bottom once, then use it as a reference. Pair it with [`SYSTEM_ARCHITECTURE.md`](SYSTEM_ARCHITECTURE.md) for the whole-system view and [`BACKEND_ARCHITECTURE.md`](BACKEND_ARCHITECTURE.md) for the API this UI talks to. If you're making a visual/interaction change, [`FRONTEND_STANDARDS.md`](../vmmc-frontend/FRONTEND_STANDARDS.md) is the actual conventions rulebook — this document is about understanding the app, that one is about extending it correctly.
 
 > This document lives in `docs/`, but all repo-relative paths mentioned below (`src/...`, etc.) are relative to `vmmc-frontend/`, not to this file's own location.
 
@@ -16,21 +16,25 @@ This app started life as a **Figma Make**–generated Vite SPA — a fully mocke
 
 ```
 src/app/
-├── layout.tsx                    Root HTML shell
-├── page.tsx                       "/" — client-redirects to /dashboard or /login
-├── login/page.tsx                 Public
-├── forgot-password/page.tsx       Public
-└── (dashboard)/                   Route group — shares one auth-guarded layout
-    ├── layout.tsx                  Renders <Layout> (header+sidebar) around every child route
-    ├── dashboard/page.tsx
-    ├── compliance/page.tsx
-    ├── upload/page.tsx
-    └── profile/page.tsx
+├── layout.tsx                     Root HTML shell and metadata
+├── page.tsx                       "/" — redirects to /dashboard or /login
+├── login/page.tsx                 Public login and OTP flow
+├── signup/page.tsx                Public account setup
+├── forgot-password/page.tsx       Public password recovery
+├── privacy/page.tsx               Public privacy and cookie notice
+├── first-login/page.tsx           Authenticated required password change
+└── (dashboard)/                   Shared client-guarded application layout
+  ├── layout.tsx                 Auth guard + shared <Layout>
+  ├── dashboard/page.tsx
+  ├── compliance/page.tsx
+  ├── upload/page.tsx
+  ├── profile/page.tsx
+  └── notifications/page.tsx
 ```
 
-Every file under `src/app/` is intentionally tiny — it just renders the real implementation from `src/screens/*.tsx`. This split exists so the actual screen logic isn't tangled up with Next.js routing conventions, and so screens are trivially reusable/testable outside the router. If you're looking for what a page *does*, always go to `src/screens/`, never `src/app/`.
+Route pages are intentionally thin and render the implementation from `src/screens/*.tsx`; the root layout and route-group layout are the exceptions because they own document metadata and shared auth/navigation behavior. This split keeps screen logic separate from Next.js routing conventions. If you're looking for what a page does, start in `src/screens/` and follow any shared `src/lib/` calls.
 
-**Four screens, eight views.** There are only four screens (`Dashboard`, `Compliance`, `Upload`, `Profile`) but each one branches its entire content on role — **staff and admin see genuinely different content at the same route**, not different routes. `Compliance.tsx` at `/compliance` is "Compliance Tracker" (your own + your department, if you're a UNIT_HEAD) for staff, and "Staff Directory" (hospital-wide) for admin. Same file, same route, `role === 'admin' ? (...) : (...)` branching throughout.
+Several shared screens branch on role, so staff, unit heads, and admins can see different data or actions at the same route. For example, `/compliance` provides staff-facing compliance views and an admin registry, while `/profile` and `/notifications` also include role-specific behavior. `src/screens/` additionally contains reusable workflow components such as the review queue, registry modals, and first-login reset form; it is not a one-file-per-route directory.
 
 ---
 
@@ -64,16 +68,13 @@ Verified against the real rendered DOM (`getBoundingClientRect()`) across both m
 
 ---
 
-## 4 · Auth model — client-only, by design
+## 4 · Auth model — HttpOnly credential, client-side UI guard
 
-There is **no cookie-based session** and **no server-side auth check**. The whole thing is:
+The **credential** and the **UI session state** are separate. After successful login (and OTP when enabled), the backend sets the Supabase access token in the `HttpOnly` `vmmc_session` cookie. JavaScript cannot read that token. The shared API client sends requests with `credentials: 'include'`, allowing the browser to attach the cookie; the backend validates it with Supabase Auth and enforces the caller's role on protected endpoints. The root layout displays the essential-cookie notice; `/privacy` explains the current data uses and cookie behavior. Signup requires an unchecked-by-default notice acknowledgment before sending the existing roster-based signup request. The public notice marks controller details, lawful basis, retention schedule, and official privacy contact for DPO confirmation rather than inventing them. The notice is a compact fixed corner card (bottom-left from 640px up, above the tab bar inside the app on phones, and narrow public pages reserve matching bottom padding while it shows); an earlier full-width version covered the Log in and Create account buttons and the phone tab bar.
 
-```ts
-// src/lib/auth.ts
-sessionStorage.setItem('vmmc_session', JSON.stringify({ accessToken, expiresAt, user }))
-```
+**The login 2FA step** (`Login.tsx`, `otpStep`) uses the shared six-box `OtpInput` (see §7). A wrong code clears the boxes, turns them red and refocuses the field. **"Resend code"** (30-second cooldown) repeats `POST /auth/login` with the Employee ID, portal and the password still held in component state. It deliberately needs the password: `verify-login-otp` has none to re-check, and an ID-only resend would let anyone flood a colleague's inbox. The newest code supersedes the older one, because the backend only checks the latest unconsumed code.
 
-`login()` stores the real JWT (issued by the backend's `/auth/login`, itself a real Supabase Auth token) plus the decoded user object in `sessionStorage`. `getToken()` reads it back out for every API call. Because `sessionStorage` doesn't exist during server rendering, every auth check (`isAuthenticated()`, `getRole()`) has to run client-side inside a `useEffect` — never at module scope, never during SSR. `useAuthGuard('auth' | 'guest' | 'first-login')` (`src/lib/useAuthGuard.ts`) is the shared hook every protected/public route uses: it renders nothing until the client-side check resolves, then either redirects or lets the page render.
+`src/lib/auth.ts` stores only a non-secret UI shell (user details, expiry, and the first-login password-change flag) in `sessionStorage`; it removes `accessToken` before saving, and `getToken()` returns `null`. This lets the client-side `useAuthGuard('auth' | 'guest' | 'first-login')` (`src/lib/useAuthGuard.ts`) choose which screen to show after hydration. It is a navigation/UX guard, not the security boundary — the backend remains responsible for authorization. Since `sessionStorage` is unavailable during server rendering, the UI check runs in `useEffect`, not at module scope or during SSR.
 
 **A real bug: the first-login page could never actually render.** `'auth'` mode's rule — if authenticated but `requiresPasswordChange()` is true, redirect to `/first-login` — is correct for every *other* protected page (send an unfinished-reset user back to finish it), but `/first-login` itself also used `'auth'` mode. Landing there with the flag still true matched the same condition and called `router.replace('/first-login')` on itself: same URL, so nothing about the page's state changed, and the branch `return`s before ever calling `setReady(true)`. The component was stuck rendering `null` forever — a real, authenticated user completing signup would reach this page and see a permanently blank white screen, with no error and nothing in the console. No e2e test caught it because none drove an actual signup-then-first-login flow end to end; every login-focused test used a pre-existing account with the flag already `false`. Confirmed live by flipping a real test account's `must_change_password` to `true` via the service-role key and driving a real browser login — the page genuinely rendered zero visible characters — then confirmed fixed the same way. The fix: a dedicated `'first-login'` mode that only redirects *away* once `requiresPasswordChange()` is false (nothing left to do here), instead of reusing `'auth'`'s rule verbatim. See `SYSTEM_ARCHITECTURE.md` §7 (eighth pass) for the full narrative.
 
@@ -90,7 +91,7 @@ getPreciseRole(): 'STAFF' | 'UNIT_HEAD' | 'ADMIN' | null   // the real backend-c
 
 `src/lib/api.ts` is a thin `fetch` wrapper (`api.get/post/patch/delete`) that every screen uses instead of calling `fetch` directly. It exists to solve one specific, named problem from the build spec: **"the client's terrible mobile data."** Every call automatically gets:
 
-- **The bearer token attached** (`Authorization: Bearer <token>` from `sessionStorage`), so screens never touch auth headers themselves.
+- **The session cookie attached** by the browser because every request uses `credentials: 'include'`. The active frontend does not place the access token in `Authorization`; the API client's legacy bearer support is inactive because `getToken()` returns `null`.
 - **A 10s timeout** via `AbortController`, so a hung request doesn't spin forever.
 - **Retry with backoff** (2 retries, 500ms then 1500ms) — but only for genuinely retryable failures: network drops, timeouts, and 408/429/5xx responses. A real 400 (bad input) or 401 (bad credentials) is thrown immediately, never retried.
 - **An `Idempotency-Key` option**, passed straight through as a header for write calls, matching the backend's idempotency convention (see backend docs §8) — the frontend doesn't invent its own idempotency logic, it just carries the key the caller supplies.
@@ -130,6 +131,8 @@ This looks like duplication, and it partly is — but it's deliberate, not an ov
 - **Dropdowns:** `useState` open flag + a `document`-level click listener added only while open (cleaned up on close), with `onClick={e => e.stopPropagation()}` on the trigger wrapper so opening it doesn't also immediately close it. `Compliance.tsx`'s `CustomDropdown` is the canonical implementation, reused verbatim for the desktop header's identity dropdown in `Layout.tsx`.
 - **Toggle switch:** one hand-built `ToggleSwitch` component (green pill ⇄ gray pill, sliding knob) is the *only* on/off control anywhere in the app — every boolean setting reuses it.
 - **List rows:** icon box (fixed size) + `flex: 1` text column (title + meta line) + optional trailing badge/chevron. This exact shape recurs across the staff directory, review queue, activity logs, devices, escalations — anywhere a list appears.
+- **Verification-code field:** `src/components/OtpInput.tsx`, used by Login (2FA) and ForgotPassword. It is **one real, visually hidden text input drawn as six boxes**, not six inputs, so paste, `autocomplete="one-time-code"` autofill, Backspace and screen readers behave; there are no placeholder digits (a sample `123456` reads like a real code); `aria-invalid` plus red boxes mark a wrong code. Cleaning and capping live in the unit-tested `src/lib/otp.ts`. Each instance takes its id from `useId`, because the mobile and desktop trees are both mounted (§6).
+- **Countdowns and cooldowns store a deadline, not a tick count:** keep the time the control unlocks, derive the seconds left from `Date.now()`, and refresh on `visibilitychange`. Login's Resend button is the reference.
 - **Entrance animation:** `fadeRise` from `src/lib/motion.ts` — `opacity 0→1`, `y: 12→0`, staggerable via a numeric `custom` index passed to each `motion.*` element, so a screen's sections visibly cascade in on mount rather than popping in at once.
 - **Skeleton loading:** `src/components/Skeleton.tsx` — `SkeletonBlock` (pulsing placeholder rectangle, animated via `framer-motion`'s `animate={{ opacity: [0.5, 1, 0.5] }}` with `repeat: Infinity` rather than Tailwind's `animate-pulse`, to stay consistent with the inline-style-owns-visuals convention above), plus three shape presets built on top of it: `SkeletonListRow`, `SkeletonCard`, `SkeletonStaffCard`. Used by `Dashboard.tsx` and `Compliance.tsx` in place of a plain "Loading…" string — replaced screen-by-screen, matching each real layout's actual shape (stat-card grid, list rows, bordered staff card) rather than one generic spinner.
 - **Unified dashboard panel (STAFF's own record):** `Compliance.tsx`'s `MyComplianceDashboard` (desktop) / `MyComplianceDashboardMobile` (mobile) replaced the old approach of dropping a single `StaffCard` into a 3-column grid for the STAFF "My Compliance Record" view — that left one small card stranded against a mostly-empty grid. The new panel is one full-width card: navy-gradient header (avatar, name, status pill) → 4-stat row (CXR, GeneXpert, exam date, next requirement due) → an **Annual Cycle Progress** bar → action buttons. The progress bar isn't a stored field — it's computed client-side as `% of time elapsed between examDate and dueDate`, both of which the API already returns (`cycleProgress()` in `Compliance.tsx`), specifically so nothing on the panel is fabricated data. A genuine data quirk this surfaced while verifying live against a real test account (`VMMC-25-0021`): the panel can legitimately show a green "Compliant This Cycle" pill *and* "31 days overdue" on the next-requirement stat in the same view. That isn't a bug — `status` (SLA timeline) and the computed days-until-`dueDate` are two different things, and `dueDate` doesn't get pushed forward until the monitoring engine (cron or a manual "Run Compliance Scan") actually reclassifies the record. The old single-card view never surfaced this because it didn't show a due date at all; the new panel does, which is arguably more honest about the real state even when the two numbers look like they disagree. `StaffCard`/`MobileStaffCard` are unchanged and still used for the UNIT_HEAD/ADMIN staff-directory grid — only STAFF's own-record view changed.
@@ -141,11 +144,22 @@ This looks like duplication, and it partly is — but it's deliberate, not an ov
 | Screen | Staff sees | Admin sees | Real endpoints |
 |---|---|---|---|
 | `Dashboard.tsx` | Personal next-due date, department compliance %, urgent/registry/reports stat cards, monthly trend, escalation list (UNIT_HEAD only) | Hospital compliance %, total personnel, critical cases, annual clearance progress + monthly breakdown, CSV report exports | `GET /dashboard/overview`, `GET /escalations`, `PATCH /escalations/:id/acknowledge`, `GET /reports/*` |
-| `Compliance.tsx` | Own dossier (STAFF) or full department tracker (UNIT_HEAD) | Hospital-wide staff directory with Compliant/Critical/Pending rollup | `GET /me/compliance-summary`, `GET /compliance/tracker`, `GET /compliance/employees/:id/dossier`, `GET /departments` |
+| `Compliance.tsx` | Own dossier (STAFF) or full department tracker (UNIT_HEAD) | **Modules Registry** (`ModulesRegistry.tsx`): four tabs (APE, Pre-Employment, PEP logs, Immunizations), passport cards, printable certificate. Phones keep the old Staff Directory list | `GET /me/compliance-summary`, `GET /compliance/tracker`, `GET /compliance/employees/:id/dossier`, `GET /departments`; admin: `GET /registry/*`, `POST /monitoring/run-scan` |
 | `Upload.tsx` | Upload CXR/GeneXpert results, see own Recent Submissions | Review Queue — approve (with saved signature) or reject pending documents | `POST /documents`, `GET /me/documents`, `GET /review-queue`, `PATCH /documents/:id/review` |
-| `Profile.tsx` | Account settings, Activity Logs, Login History, Manage Devices, Data Privacy toggles, Change PIN, Request a Change | Everything staff has, plus Digital Signature capture, admin Performance Overview, and Change Requests approve/reject | `GET/PATCH /me/profile`, `GET /me/activity-logs`, `GET /me/login-history`, `GET/POST/DELETE /me/devices`, `GET/PATCH /me/privacy-settings`, `PATCH /me/security/pin`, `PATCH /me/security/password`, `GET/POST/DELETE /me/signature`, `GET /me/performance-stats`, `POST /change-requests`, `GET /change-requests/mine`, `GET /change-requests` (ADMIN), `PATCH /change-requests/:id/approve`\|`reject` (ADMIN) |
+| `Profile.tsx` | Account settings, Activity Logs, Login History, Manage Devices, Data Privacy toggles, Change PIN, Request a Change | The same mockup layout as staff, with a **system-wide** audit-trail table (`GET /audit-trail`) instead of the personal one, an "Administrator tools" row (Digital Signature, Change Requests, Review Performance) and Login History under More Account Settings; plus Digital Signature capture, admin Performance Overview, and Change Requests approve/reject | `GET/PATCH /me/profile`, `GET /me/activity-logs`, `GET /me/login-history`, `GET/POST/DELETE /me/devices`, `GET/PATCH /me/privacy-settings`, `PATCH /me/security/pin`, `PATCH /me/security/password`, `GET/POST/DELETE /me/signature`, `GET /me/performance-stats`, `POST /change-requests`, `GET /change-requests/mine`, `GET /change-requests` (ADMIN), `PATCH /change-requests/:id/approve`\|`reject` (ADMIN) |
 | `Layout.tsx` (shared chrome) | Notification bell (real in-app notifications) | Same | `GET /me/notifications` |
-| `PiiIndex.tsx` | Nothing — ADMIN-only end to end, shows a restricted-access message instead of calling the API | Hospital-wide PII registry: Employee ID, contact details, employment type (COS/Permanent), searchable, CSV export | `GET /reports/pii-index` |
+| `Notifications.tsx` | Own in-app notifications, filterable by kind | The "Notification & Screening Reminder Engine": three explainer cards (the real event tiers and schedule), a **Notification Dispatch Log** with each channel's real outcome, **Escalations Requiring Attention** (Acknowledge / Mark Resolved), and their own notifications | `GET /me/notifications`; admin: `GET /notifications/log`, `GET /escalations`, `PATCH /escalations/:id/acknowledge\|resolve` |
+| `RegistryModals.tsx` | (admin only) | Certificate, pre-employment print, and the Add / Update Health Record window | `GET /registry/certificate/:id`, `GET/PUT /pre-employment/:id`, `GET/POST/PATCH /pep-logs`, `GET/POST /immunizations/:id` |
+
+*`PiiIndex.tsx` (the admin PII table) was removed in Part R; its backend endpoint `GET /reports/pii-index` remains with no UI.*
+
+### The admin Modules Registry (`ModulesRegistry.tsx`, `RegistryModals.tsx`)
+
+- **One list component, four column specs.** `RegistryList` renders any tab from a column spec (`key`, `label`, `width`, `role`: identity / status / action, `render`). The table (from `xl`) and the card list (below `xl`) come from the same spec, so a column can't exist in one and not the other. The card list sits in a wrapper div because an inline `display: grid` on the `<ul>` itself would beat `xl:hidden`.
+- **Data.** `useRegistry(path, active, version)` fetches a tab the first time it is opened and again when its `version` is bumped (after a save or a compliance scan); it keeps the old rows on screen while refreshing. Searching and the status filter run client-side on the loaded rows (`lib/registry.ts`, unit-tested). The passport cards reuse the APE rows.
+- **Modals are portaled to `<body>`** (`ModalShell`): focus moves in and is trapped, Escape closes, and focus returns to the control that opened it. Portaling is also what makes printing work: the app shell is a fixed-height, overflow-hidden box that would cut a print off at one screen, so `globals.css` has an `@media print` block that hides every `body` child except `.print-portal`, turns the overlay static, and hides `.no-print` controls. The Playwright check emulates print media and asserts exactly that.
+- **No invented content on the certificate.** It shows the CXR and GeneXpert status, the exam date, issue and validity dates, and the reviewer's own name, title and signature image, all from `GET /registry/certificate/:id`. The pre-employment printout has no reviewer to name, so it says who printed it.
+- **`api.put` was added** (the registry's pre-employment save is the first PUT), and the client now treats an empty 200 body as `null` instead of retrying it as a network failure (see `PROGRESS_REPORT_3.md` Part R).
 
 Every one of these was, at some point in this build, a hardcoded array sitting at module scope in the screen file. If you ever see a `const someMockLookingArray = [...]` at the top of a screen file today, that's either (a) small structural config that's genuinely static (nav item lists, DTO-shaped option lists) or (b) a known remaining gap — check the file for a comment explaining which.
 
@@ -170,17 +184,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 Trace `useAuthGuard('auth')` itself (`src/lib/useAuthGuard.ts`):
 ```ts
-export function useAuthGuard(mode: 'auth' | 'guest') {
+export function useAuthGuard(mode: 'auth' | 'guest' | 'first-login') {
   const [ready, setReady] = useState(false)   // (1) starts false — nothing renders yet
   useEffect(() => {
-    const authed = isAuthenticated()          // (2) reads sessionStorage — only possible client-side, hence useEffect
+    const authed = isAuthenticated()          // (2) reads the non-secret UI session shell, hence useEffect
     if (mode === 'auth' && !authed) { router.replace('/login'); return }  // (3) not logged in -> bounce, stay `ready=false` forever
     setReady(true)                            // (4) logged in -> flip to true, component re-renders, `children` shows
   }, [mode, router])
   return ready
 }
 ```
-The reason this has to be a `useEffect` and not a plain `if (!isAuthenticated())` check at the top of the component: `sessionStorage` doesn't exist during server-side rendering, and Next.js renders every component once on the server first. If you read `sessionStorage` outside a `useEffect`, the server-render crashes. Returning `false` initially and flipping it inside `useEffect` guarantees the check only ever runs in the browser, after hydration — at the cost of a one-frame flash of nothing, which is why `if (!ready) return null` exists.
+The reason this has to be a `useEffect` and not a plain `if (!isAuthenticated())` check at the top of the component: `sessionStorage` doesn't exist during server-side rendering, and Next.js renders every component once on the server first. If you read it outside a `useEffect`, the server render crashes. Returning `false` initially and flipping it inside `useEffect` guarantees the UI check only runs in the browser, after hydration — at the cost of a one-frame flash of nothing, which is why `if (!ready) return null` exists. Protected API access is still checked independently by the backend using the HttpOnly cookie.
 
 ### 9.2 Walkthrough: a screen going from "loading" to real data on screen
 
@@ -251,9 +265,10 @@ The backend must be running separately (`vmmc-backend`, `npm run start:dev`) for
 - This project hit a real **Turbopack + space-in-path** bug (`Capstone VMMC` has a space) that crash-loops the *dev server* specifically. The dev server is run with `--webpack` as a result (`npx next dev --webpack`). `next build` (production) uses Turbopack fine — the bug is dev-server-specific.
 - For **one-off, exploratory** browser verification (not a committed test), install Playwright **outside** this project directory (e.g. a scratch folder) and drive it against the already-running dev server — never a second dev server instance, and never inside this repo's own `node_modules`. For **real, committed** e2e coverage, use the `e2e/` suite at the repo root instead (see below) rather than writing another scratch script.
 - Because of §6's dual mobile/desktop blocks, both versions of an element usually exist in the DOM simultaneously (only one is visually shown). A plain `page.getByText('X')` in a test can silently match the *hidden* one first — chain `.locator('visible=true').first()` onto any locator that might match both (`e2e/ui/helpers.ts`'s `visibleText()` at the repo root already does this).
+- **Three real bugs that only a browser run found, with `tsc` and the unit tests green throughout** (`PROGRESS_REPORT_3.md` Parts U and V). *The cookie notice trapped buttons:* it was a wide `position: fixed` bar on every page, which hid the whole phone tab bar inside the app and sat on top of the Log in and Create account buttons at ordinary laptop and phone heights, so Playwright's own click on the button was blocked. Fixed with a 360px corner card, lifted above the tab bar in the app, plus matching bottom padding on narrow public pages while it shows. *The code field lost a digit when pasted with a space:* the first `OtpInput` set `maxLength={6}`, and a code pasted as `482 913` is seven characters, so the browser cut it to `482 91` before the cleanup could strip the space. A plain `482913` paste passed, so only a paste with a space or dash exposed it. Now there is no `maxLength`; `sanitizeOtp` caps the value. *The resend countdown ran behind:* the first version subtracted one per `setTimeout`, but a phone browser pauses timers while the person is in their email app, so the button would still have read "in 22s" after 30s. It now stores the unlock time and recomputes from `Date.now()`.
 
 **Testing, two layers:**
-- **Unit tests** (`npm test`, Vitest) — scoped deliberately narrow: pure, dependency-free functions in `src/lib/*` (e.g. `calculateAge`/`formatBirthDate`/`toCsv` in `src/lib/format.ts`, `getInitials` in `src/lib/auth.ts`). No jsdom, no component rendering — `vitest.config.ts` runs in a plain Node environment. These functions were deliberately extracted out of the screen components that used to define them inline (`Profile.tsx`, `Dashboard.tsx`) specifically so they could be unit-tested without dragging in React/Next.js/framer-motion just to reach one small function.
+- **Unit tests** (`npm test`, Vitest) — scoped deliberately narrow: pure, dependency-free functions in `src/lib/*` (e.g. `calculateAge`/`formatBirthDate`/`toCsv` in `src/lib/format.ts`, `getInitials` in `src/lib/auth.ts`, `sanitizeOtp`/`activeOtpIndex` in `src/lib/otp.ts`). No jsdom, no component rendering — `vitest.config.ts` runs in a plain Node environment. These functions were deliberately extracted out of the screen components that used to define them inline (`Profile.tsx`, `Dashboard.tsx`) specifically so they could be unit-tested without dragging in React/Next.js/framer-motion just to reach one small function.
 - **End-to-end tests** (`npm run test:e2e` from the repo root, Playwright) — real browser, real running app, real backend. Covers actual user flows (login, dashboard, compliance tracker, profile identity) that unit tests deliberately don't touch. See `docs/SYSTEM_ARCHITECTURE.md` §2 for how the two repos' e2e coverage is consolidated in one place.
 
 ---
