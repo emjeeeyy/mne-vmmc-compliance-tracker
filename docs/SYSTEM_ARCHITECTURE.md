@@ -111,6 +111,8 @@ flowchart TD
   apiCalls --> serverCheck[Backend validates token and role]
 ```
 
+At the OTP challenge the screen offers **Resend code** (30-second cooldown). It repeats `POST /auth/login` with the Employee ID, portal and the password the screen still holds, so a resend always requires the password and the backend needs no new endpoint. Each call stores a new `login_otps` row and `verify-login-otp` only checks the newest unconsumed one, so the newest email is the only one that works. Each new code has its own budget of 5 wrong guesses; the only request limit is the global throttle (120 per minute), so a per-account limit on how often a login code can be issued is a known, unbuilt hardening step (`HANDOFF.md` §6).
+
 **Local dev, both repos running together:**
 ```bash
 # one command from the repo root (see package.json) — runs both via `concurrently`

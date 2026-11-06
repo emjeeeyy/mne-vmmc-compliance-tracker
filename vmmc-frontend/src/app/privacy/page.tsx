@@ -11,7 +11,7 @@ export default function PrivacyPage() {
         <Link href="/login" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, marginBottom: 16, color: '#1d3d93', fontSize: 14, fontWeight: 600 }}>
           Back to sign in
         </Link>
-        <p style={{ margin: 0, color: '#008d46', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>VMMC TB DOTS Compliance System</p>
+        <p style={{ margin: 0, color: '#047857', fontSize: 12, fontWeight: 800, textTransform: 'uppercase' }}>VMMC TB DOTS Compliance System</p>
         <h1 style={{ margin: '8px 0', fontFamily: 'Poppins,sans-serif', fontSize: 30, lineHeight: 1.2, color: '#1f3151' }}>Privacy Notice</h1>
         <p style={paragraphStyle}>Last updated: November 3, 2026</p>
 

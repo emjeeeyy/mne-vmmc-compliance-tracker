@@ -697,6 +697,75 @@ The user shared the admin Profile mockup. It is the same layout as the staff Pro
 
 ---
 
+## Part U — Checking the merged login/session code, and fixing the cookie notice that covered buttons
+
+After pulling the groupmate's merge (session moved into an `HttpOnly` cookie, email-based signup, privacy page, cookie notice), the merged code was run locally and checked.
+
+### What was checked and what held
+
+- **Roles, over real HTTP against the running backend (read-only).** Signed the three new test accounts and Juan Dela Cruz in with their passwords and called the API. About 70 checks passed: staff (and Juan, now ordinary staff) are refused every admin and unit-head route and cannot read another person's records or another department's files; the test unit head sees only OPD Nursing (tracker, reports, review queue, files) and is refused the registry, dispatch log and audit trail; the test admin reaches everything, and bad input is rejected with 400. The new cookie path works: a request with only the `vmmc_session` cookie is accepted, one with no cookie or a fake one is refused, and the CORS preflight allows credentials and the `Idempotency-Key` header.
+- **A real finding from how it was done.** Those sign-ins went straight to Supabase, skipping the emailed code. The backend guard only checks that the token is valid; the emailed code is enforced only inside `POST /auth/login`. So anyone holding an account's email and password, plus the Supabase URL and public key, can skip 2FA. Whether those two values are exposed anywhere public was not checked.
+
+### Real bugs found in the cookie notice, and the fix
+
+The new `CookieNotice` was a wide fixed overlay at the bottom of every page. Checked at laptop, tablet and phone sizes it:
+1. **hid the whole bottom tab bar** on phones inside the app;
+2. **covered the Log in button** on a typical 800px-tall phone;
+3. **covered the Create account button** on a 1440x900 laptop (the browser's own click was blocked by it);
+4. also, on the privacy page, the small green title failed the contrast check (4.28:1; it needs 4.5).
+
+The fix, all in `CookieNotice.tsx` plus one colour:
+- It is now a compact card (360px) in the **bottom-left corner on laptops**, where the centered sign-in and signup cards never reach it.
+- **Inside the app on a phone**, it sits above the tab bar.
+- **On a public page narrower than a laptop (under 1100px)**, it reserves matching space under the page while it shows, so a button underneath can always be scrolled clear of it. The space is removed when it is dismissed or when the visitor enters the app.
+- The privacy page title colour went from `#008d46` to `#047857`.
+
+Verified with a 50-check browser run (login and signup at six sizes, the staff phone tab bar tapped while the notice shows, admin pages at four sizes with axe, no new scrollbar, space reserved and released correctly): all pass.
+
+### Still not tested
+
+A real browser login (it needs the emailed code), the cookie across Vercel and Railway on the live site, and a real signup.
+
+---
+
+## Part V — The verification-code field: no more "123456", one shared input
+
+The login 2FA step showed a grey `123456` placeholder in one wide text box. A fake sample code in the field looks like a real code, and it was easy to mistake for something already typed. The step now uses six empty boxes, and the forgot-password code step uses the same component (it had its own separate six-box input with no paste support).
+
+### What changed
+
+- **New shared component `src/components/OtpInput.tsx`.** Six boxes drawn over **one real, invisible text input**. Not six inputs: a single field is what makes pasting, autofill, Backspace and screen readers work properly. The boxes only show what that one field holds, with a blinking caret in the next empty box (steady if the visitor prefers reduced motion), a gap between digits 3 and 4, and a red border when the code was wrong.
+- **Pure helpers in `src/lib/otp.ts`** (`sanitizeOtp`, `activeOtpIndex`) with unit tests: digits only, capped at six, so `482 913`, `482-913` and a pasted `482913\n` all land as `482913`.
+- **Real labels.** The field has a proper `<label>` ("Verification code" on login; hidden but present on forgot-password), `autocomplete="one-time-code"` (phones offer the code from the email or SMS), `inputmode="numeric"`, and `aria-invalid` on a wrong code. Each mounted copy gets its own id from `useId`, because both the phone and desktop trees are mounted at once.
+- **A wrong code now starts over.** The boxes clear, the red state and message show, and focus goes straight back to the field. Typing again removes the red state. A dropped connection keeps what was typed (only a rejected code clears the boxes).
+- **Two contrast fixes inside the code step** (axe flagged them at laptop width): the "We sent a 6-digit code…" text (`#718096` to `#5a6678`) and the "Back to login" link (`#008d46` to `#047857`).
+
+### A real bug the browser check caught in my own first version
+
+The first version set `maxLength={6}` on the field. A code pasted as `482 913` (the way many emails show it) is seven characters, so the browser cut it to `482 91` **before** my cleanup could strip the space, and the last digit was silently lost. Removed `maxLength`; `sanitizeOtp` enforces the length instead. The forgot-password paste of a plain `482913` had passed, so only a paste with a space or dash exposed it. Rule for any future pasted-code field: never rely on `maxLength` when the pasted text can contain separators.
+
+### Verified
+
+A 41-check browser run with a mocked API (phone 390px and laptop 1280px, plus 320px and the forgot-password step): no `123456` anywhere, one visible labelled field per layout with distinct ids across both mounted trees, typing and Backspace, pasting `482 913`, wrong code (red boxes, message, cleared, focus kept, error clears on typing), Enter submits exactly the six digits, axe clean on the code step, no sideways scroll at 320px. 66 frontend unit tests pass; `tsc` clean.
+
+### Resend code on the login 2FA step
+
+The forgot-password screen had a "Resend" link; the login 2FA step did not. The only way to get a fresh code was "Back to login" and typing the password again, which nothing on the screen explained. If the email was slow or lost, the person was stuck waiting.
+
+- **How it works.** "Resend code" repeats the password step: it calls the existing `POST /auth/login` again with the Employee ID, portal and the password the screen still holds in memory. No backend change. A resend that took only an Employee ID would let anyone flood a colleague's inbox (an Employee ID is not secret), and `verify-login-otp` has no password to re-check, so requiring the password is the safe shape. The newest code replaces the older one (the backend only ever checks the latest unconsumed code), so the screen says "use the newest email; the earlier code no longer works".
+- **30-second cooldown**, so a slow email isn't answered with a pile of new codes. It starts when the first code goes out and restarts on each resend.
+- **The cooldown is a fixed deadline, not a tick counter.** My first version counted down one `setTimeout` per second. A phone browser pauses timers while the person is in their email app, which is exactly when this screen is used, so the button would have said "in 22s" long after 30s had passed. It now stores the time the button unlocks and recomputes on every tick and on `visibilitychange` (when the tab comes back to the front).
+- Typed digits are cleared on resend (they belonged to the old code), the "new code was sent" notice is announced to screen readers (`role="status"`), and a failed resend (wrong password since, connection) shows the server message and leaves the button usable.
+- Verified with a 30-check browser run (phone and laptop, fake clock): countdown starts and ticks, clicking during it sends nothing, resend makes exactly one extra login call carrying the password, digits cleared, notice announced, countdown restarts, a failed resend shows its error, logging in again restarts the countdown, axe clean apart from the existing intro text noted below. The earlier 41-check code-box run and 66 unit tests still pass.
+
+### Not fixed (already there, outside this change)
+
+On the laptop login, axe still flags the grey intro text above the form ("Input your secure credentials below…", `#718096` on white, 4.0:1) and, on the password step, three more small grey or green texts. That intro text also stays on screen during the code step. These were there before this change and were left alone; they are a quick colour clean-up if wanted. Also worth knowing: every new code (a resend, or logging in again) starts with a fresh budget of 5 wrong guesses, and the only request limit is the global 120 requests per minute. Someone who already has an account's password could therefore keep asking for new codes and keep guessing. It is a long shot (each code is 1 in a million, and they need the password first), but a per-account limit on how often a login code can be issued would close it. Not done; this change only makes the existing path visible.
+
+Not yet tested: a real login with the real emailed code.
+
+---
+
 ## Current status
 
 Everything through Part D is live on `main` and deployed (Vercel + Railway, linked and confirmed working via a real cross-origin login). Parts E and F (real 2FA, defaulting on) are live on `main` as of `497dff6`. Part G (the production login-hang incident: bounded/non-blocking email sends, then the IPv4-forcing attempt, then the full Brevo provider swap) is pushed as `fc9b024`/`98cb866`/`ab4a29b` and **confirmed working live in production** — a real deployed login now completes end to end with 2FA, including actual email delivery. Parts H through J (Enter-key submit, Hep B Titers, and the staff landing page + Upload redesign) are all complete and fully verified live — through both `curl` and the real browser UI — but **not yet committed/pushed**, pending the user's go-ahead per the standing push-confirmation rule. Part K (the sidebar → single top-band header plus the staff dashboard rebuilt to match the mockup) is complete, checked side by side against the mockup at 1440px and screenshotted at 1024 to 1920px, and also unpushed. The Upload screen's own mockup pass is next. One deliberately-deferred open item on record: department compliance rate/pending-count are currently not shown anywhere on the desktop staff dashboard (Part J), left that way at the user's explicit request, to revisit later. No other outstanding failures or known-broken state as of this entry.

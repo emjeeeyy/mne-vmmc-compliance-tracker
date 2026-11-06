@@ -140,6 +140,12 @@ The Dashboard (staff and admin), Layout, Upload, Compliance, Profile, Document V
 
 **Ask about the browser zoom before resizing anything.** An address-bar magnifier icon means the user isn't at 100%. A "this looks small" or "this looks compressed" report (and a login page that looks tiny on a wide monitor) may just be zoom; confirm it with one screenshot of the same page before changing any size.
 
+**Verification-code fields use the shared `OtpInput`, never a bare text box.** No sample digits as a placeholder (a fake `123456` reads like a real code). It is one invisible real input drawn as boxes, so paste, autofill (`autocomplete="one-time-code"`) and screen readers work. Do not set `maxLength` on a field people paste into: the browser truncates `482 913` before your cleanup can strip the space and the last digit is lost; clean and cap the value yourself (`sanitizeOtp`).
+
+**Cooldowns and countdowns store a deadline, not a tick count.** Phone browsers pause timers while the tab is in the background (the person is in their email app), so a counter that subtracts one per `setTimeout` runs behind. Keep the time the control unlocks, derive the seconds left from `Date.now()`, and refresh on `visibilitychange` (see the resend button in `Login.tsx`).
+
+**A floating notice must never trap a control.** The cookie notice is fixed to the screen, so where it sits matters: bottom-left card on laptops (the centered auth cards never reach it), above the fixed tab bar inside the app on phones, and on a public page under 1100px wide the page reserves matching bottom padding while it shows. Any new banner or toast needs the same test: load the page at a laptop, tablet and phone size and check that no button is under it, or that scrolling uncovers it.
+
 **Charts (`AdminLanding.tsx` is the reference):**
 - **Validate the palette, don't eyeball it.** Run the `dataviz` skill's `scripts/validate_palette.js` on any series colors. The admin dashboard's cleared / due soon / overdue colors are `#00703f` / `#e36e15` / `#be123c`, the nearest set that passes: the mockup's own green and red failed the chroma and normal-vision-separation checks.
 - **Color is never the only encoding.** Every chart has a labeled legend and names the series in tooltips and readouts, and a chart's data is also available as a screen-reader table.
