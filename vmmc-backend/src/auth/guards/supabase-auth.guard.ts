@@ -48,7 +48,18 @@ export class SupabaseAuthGuard implements CanActivate {
 
   private extractToken(request: RequestWithEmployee): string | null {
     const header = request.headers.authorization;
-    if (!header?.startsWith('Bearer ')) return null;
-    return header.slice('Bearer '.length);
+    if (header?.startsWith('Bearer ')) return header.slice('Bearer '.length);
+
+    const cookieHeader = request.headers.cookie;
+    if (!cookieHeader) return null;
+
+    for (const part of cookieHeader.split(';')) {
+      const [name, ...rest] = part.trim().split('=');
+      if (name === 'vmmc_session') {
+        return decodeURIComponent(rest.join('=')).trim() || null;
+      }
+    }
+
+    return null;
   }
 }

@@ -82,6 +82,7 @@ async function request<T>(path: string, options: ApiRequestOptions = {}): Promis
     try {
       const res = await fetch(`${API_URL}${path}`, {
         ...rest,
+        credentials: 'include',
         headers: finalHeaders,
         body: isFormData ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
         signal: controller.signal,

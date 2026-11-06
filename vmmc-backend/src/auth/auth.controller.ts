@@ -1,6 +1,6 @@
-import { Body, Controller, Headers, HttpCode, Ip, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Headers, HttpCode, Ip, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { FirstLoginPasswordChangeDto } from './dto/first-login-password-change.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -18,26 +18,42 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(200)
-  login(@Body() dto: LoginDto, @Ip() ip: string, @Req() req: Request) {
-    return this.authService.login(dto.employeeId, dto.password, dto.portal, {
+  async login(
+    @Body() dto: LoginDto,
+    @Ip() ip: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const session = await this.authService.login(dto.employeeId, dto.password, dto.portal, {
       ipAddress: ip ?? null,
       userAgent: req.headers['user-agent'] ?? null,
     });
+    if (!('mfaRequired' in session)) {
+      this.setSessionCookie(res, session.accessToken, session.expiresAt);
+    }
+    return session;
   }
 
   @Post('verify-login-otp')
   @HttpCode(200)
-  verifyLoginOtp(@Body() dto: VerifyLoginOtpDto, @Ip() ip: string, @Req() req: Request) {
-    return this.authService.verifyLoginOtp(dto.employeeId, dto.portal, dto.otp, {
+  async verifyLoginOtp(
+    @Body() dto: VerifyLoginOtpDto,
+    @Ip() ip: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const session = await this.authService.verifyLoginOtp(dto.employeeId, dto.portal, dto.otp, {
       ipAddress: ip ?? null,
       userAgent: req.headers['user-agent'] ?? null,
     });
+    this.setSessionCookie(res, session.accessToken, session.expiresAt);
+    return session;
   }
 
   @Post('signup')
   @HttpCode(200)
   signup(@Body() dto: SignupDto) {
-    return this.authService.signup(dto.employeeId, dto.employmentType);
+    return this.authService.signup(dto.email, dto.employmentType, dto.privacyAcknowledged);
   }
 
   @Post('first-login/change-password')
@@ -68,7 +84,42 @@ export class AuthController {
   @HttpCode(200)
   @ApiBearerAuth('access-token')
   @UseGuards(SupabaseAuthGuard)
-  logout(@Headers('authorization') authorization: string) {
-    return this.authService.logout(authorization.slice('Bearer '.length));
+  logout(
+    @Req() req: Request,
+    @Headers('authorization') authorization: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const token =
+      authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : this.extractTokenFromCookie(req.headers.cookie);
+    if (token) {
+      this.authService.logout(token);
+    }
+    res.clearCookie('vmmc_session', { path: '/', httpOnly: true, sameSite: 'lax' });
+    return { ok: true };
+  }
+
+  private setSessionCookie(res: Response, accessToken: string, expiresAt?: number) {
+    const expiresAtMs = Number(expiresAt ?? 0);
+    const lifetimeMs = expiresAtMs > 0 ? Math.max(0, expiresAtMs * 1000 - Date.now()) : 60 * 60 * 1000;
+    res.cookie('vmmc_session', accessToken, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: lifetimeMs,
+    });
+  }
+
+  private extractTokenFromCookie(cookieHeader?: string): string | null {
+    if (!cookieHeader) return null;
+
+    for (const part of cookieHeader.split(';')) {
+      const [name, ...rest] = part.trim().split('=');
+      if (name === 'vmmc_session') {
+        return decodeURIComponent(rest.join('=')).trim() || null;
+      }
+    }
+
+    return null;
   }
 }

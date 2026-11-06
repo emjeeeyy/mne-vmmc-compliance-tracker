@@ -1,6 +1,7 @@
 import {
   assertDocumentAccess,
   buildEmployeeId,
+  getNextEmployeeId,
   parseEmploymentTypeFromEmployeeId,
   validateEmployeeId,
 } from './assert-access';
@@ -21,6 +22,14 @@ describe('employee identity rules', () => {
 
   it('rejects a mismatched employment type when validating IDs', () => {
     expect(() => validateEmployeeId('VMMC-25-0021', 'COS')).toThrow('VMMC-COS-YY-NNNN');
+  });
+
+  it('generates the next permanent employee ID after existing current-year IDs', () => {
+    expect(getNextEmployeeId('PERMANENT', ['VMMC-25-0001', 'VMMC-25-0021', 'VMMC-25-0100'], 2025)).toBe('VMMC-25-0101');
+  });
+
+  it('generates the next COS employee ID after existing current-year IDs', () => {
+    expect(getNextEmployeeId('COS', ['VMMC-COS-25-1001', 'VMMC-COS-25-1100'], 2025)).toBe('VMMC-COS-25-1101');
   });
 });
 

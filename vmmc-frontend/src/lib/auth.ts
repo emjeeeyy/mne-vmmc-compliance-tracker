@@ -42,7 +42,8 @@ export function isAuthenticated() {
 
 /** Called by Login.tsx once the real login API call succeeds. */
 export function login(session: AuthSession) {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+  const { accessToken: _accessToken, ...safeSession } = session
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(safeSession))
 }
 
 export function setPasswordChangeRequired(required: boolean) {
@@ -57,17 +58,18 @@ export function logout() {
   sessionStorage.removeItem(STORAGE_KEY)
 
   if (session) {
-    // Best-effort session revoke — mirrors the backend's own best-effort logout.
-    // Not awaited: the UI navigates away immediately either way.
     fetch(`${process.env.NEXT_PUBLIC_API_URL?.trim() ?? 'http://localhost:8443/api'}/auth/logout`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${session.accessToken}` },
+      credentials: 'include',
     }).catch(() => {})
   }
 }
 
 export function getToken(): string | null {
-  return readSession()?.accessToken ?? null
+  // The real bearer token now lives in an HttpOnly secure cookie. The browser sends it
+  // automatically on same-origin API requests when `credentials: 'include'` is set, and the
+  // frontend keeps only a non-sensitive session shell in sessionStorage for UI state.
+  return null
 }
 
 export function getUser(): AuthUser | null {

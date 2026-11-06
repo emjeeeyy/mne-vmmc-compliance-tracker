@@ -21,8 +21,10 @@ Runs on `$PORT` (default 3000, honored automatically by the Next.js CLI). Hot re
 - `src/app/layout.tsx` - Root layout (html/body shell, global metadata)
 - `src/app/page.tsx` - `/` route; client-redirects to `/dashboard` or `/login` based on auth
 - `src/app/login/page.tsx` - Login route
-- `src/app/(dashboard)/layout.tsx` - Auth-guarded shell (single top header band, no sidebar) wrapping dashboard/compliance/upload/profile
+- `src/app/privacy/page.tsx` - Privacy notice, including the essential session-cookie explanation
+- `src/app/(dashboard)/layout.tsx` - Auth-guarded shell (single top header band, no sidebar) wrapping dashboard/compliance/upload/profile/notifications
 - `src/screens/*.tsx` - Screen implementations (rendered by the thin route pages under `src/app`)
+- `src/components/CookieNotice.tsx` - App-wide notice for the essential HttpOnly session cookie
 - `src/components/Layout.tsx` - App chrome: one gradient header band with inline nav (xl+), hamburger dropdown below xl, bottom tab bar on phones
 - `src/lib/auth.ts` - sessionStorage-based auth helpers
 - `src/lib/useAuthGuard.ts` - Client-side redirect guard (`'auth'` | `'guest'` modes) used by protected/guest routes
@@ -31,7 +33,7 @@ Runs on `$PORT` (default 3000, honored automatically by the Next.js CLI). Hot re
 
 ## Auth model
 
-Auth is a client-only `sessionStorage` flag (`vmmc_auth`) — there's no backend/session cookie yet. Because of this, protected routes and the login route are client components that check auth in `useEffect` (via `useAuthGuard`) and redirect; they intentionally render `null` until that check resolves, matching the original SPA's client-only behavior.
+The access token is stored in the backend-issued HttpOnly `vmmc_session` cookie and sent automatically with API requests using `credentials: 'include'`. `sessionStorage` contains only a non-secret UI session shell used by `useAuthGuard`; it is not the credential or the backend authorization boundary. The root layout renders the essential-cookie notice on every route. Signup links to `/privacy` and requires an unchecked-by-default acknowledgment before calling the existing signup endpoint. Keep the notice factual: the app has no optional analytics or advertising cookies, and DPO-approved retention/controller/contact details still need confirmation in the privacy notice before official publication.
 
 ## Styling
 

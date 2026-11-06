@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -7,34 +8,44 @@ import { ArrowLeft, BriefcaseBusiness, Building2, CheckCircle2 } from 'lucide-re
 import VmmcSeal from '@/components/VmmcSeal'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
 
-const employeeIdHelp = {
-  PERMANENT: 'Format: VMMC-YY-NNNN (example: VMMC-25-0021)',
-  COS: 'Format: VMMC-COS-YY-NNNN (example: VMMC-COS-25-1001)',
+const emailHelp = {
+  PERMANENT: 'Use your official VMMC email address so the system can assign your permanent employee ID.',
+  COS: 'Use your official VMMC email address so the system can assign your COS employee ID.',
 }
 
 export default function Signup() {
   const router = useRouter()
   const [employmentType, setEmploymentType] = useState<'PERMANENT' | 'COS'>('PERMANENT')
-  const [employeeId, setEmployeeId] = useState('')
+  const [email, setEmail] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [apiError, setApiError] = useState('')
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState('')
+  const [emailStatus, setEmailStatus] = useState<'SENT' | 'FAILED' | 'LOGGED'>('LOGGED')
+  const [privacyAcknowledged, setPrivacyAcknowledged] = useState(false)
 
   const handleSignup = async () => {
     setApiError('')
-    const trimmed = employeeId.trim()
-    if (!trimmed) {
-      setApiError('Please enter your Employee ID.')
+    if (!privacyAcknowledged) {
+      setApiError('Please read and acknowledge the Privacy Notice before creating your account.')
+      return
+    }
+    const trimmed = email.trim()
+    if (!trimmed || !trimmed.includes('@')) {
+      setApiError('Please enter a valid email address.')
       return
     }
     if (submitting) return
 
     setSubmitting(true)
     try {
-      await api.post('/auth/signup', {
-        employeeId: trimmed,
+      const result = await api.post<{ employeeId: string; emailStatus: 'SENT' | 'FAILED' | 'LOGGED'; message: string }>('/auth/signup', {
+        email: trimmed,
         employmentType,
+        privacyAcknowledged,
       })
+      setAssignedEmployeeId(result.employeeId)
+      setEmailStatus(result.emailStatus)
       setDone(true)
     } catch (err) {
       if (err instanceof ApiError) {
@@ -98,16 +109,16 @@ export default function Signup() {
     </div>
   )
 
-  const employeeIdField = (
+  const emailField = (
     <div style={{ marginBottom: 20 }}>
-      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#1f3151', marginBottom: 6 }}>Employee ID</label>
+      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#1f3151', marginBottom: 6 }}>Email address</label>
       <input
-        value={employeeId}
-        onChange={e => setEmployeeId(e.target.value.toUpperCase())}
-        placeholder={employmentType === 'PERMANENT' ? 'VMMC-25-0021' : 'VMMC-COS-25-1001'}
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+        placeholder="name@vmmc.gov.ph"
         style={{ width: '100%', padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
       />
-      <div style={{ fontSize: 12, color: '#718096', marginTop: 8 }}>{employeeIdHelp[employmentType]}</div>
+      <div style={{ fontSize: 12, color: '#718096', marginTop: 8 }}>{emailHelp[employmentType]}</div>
     </div>
   )
 
@@ -115,6 +126,27 @@ export default function Signup() {
     <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16, textAlign: 'center' }}>
       {apiError}
     </motion.p>
+  )
+
+  const privacyAcknowledgment = (
+    <div style={{ margin: '0 0 16px' }}>
+      <label htmlFor="signup-privacy-acknowledgment" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, color: '#40546b', fontSize: 13, lineHeight: 1.55, cursor: 'pointer' }}>
+        <input
+          id="signup-privacy-acknowledgment"
+          type="checkbox"
+          checked={privacyAcknowledged}
+          onChange={(event) => {
+            setPrivacyAcknowledged(event.target.checked)
+            if (event.target.checked) setApiError('')
+          }}
+          style={{ width: 18, height: 18, flex: '0 0 18px', marginTop: 1, accentColor: '#008d46' }}
+        />
+        <span>I have read the Privacy Notice and acknowledge how my information is used to provide this system.</span>
+      </label>
+      <Link href="/privacy" style={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, marginLeft: 28, color: '#1d3d93', fontSize: 13, fontWeight: 700, textDecoration: 'underline' }}>
+        Read the Privacy Notice
+      </Link>
+    </div>
   )
 
   const submitButton = (
@@ -130,8 +162,11 @@ export default function Signup() {
       </div>
       <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: '#1f3151' }}>Account ready</div>
       <div style={{ fontSize: 14, color: '#4a5568', lineHeight: 1.7, marginTop: 12 }}>
-        Your account has been created with the default password <strong>password123</strong>.<br />
-        You will be required to change it on your first login.
+        {emailStatus === 'SENT' ? (
+          <>Your account has been created. Your assigned employee ID is <strong>{assignedEmployeeId}</strong>. The account details email was accepted for delivery; check your inbox and spam folder.</>
+        ) : (
+          <>Your account has been created, but the email was not sent. Your assigned employee ID is <strong>{assignedEmployeeId}</strong> and your default password is <strong>password123</strong>. You will be required to change it after verifying the login code.</>
+        )}
       </div>
       <button onClick={() => router.push('/login')} style={{ width: '100%', marginTop: 18, padding: '15px 0', minHeight: 44, borderRadius: 12, border: 'none', cursor: 'pointer', background: 'linear-gradient(to right, #1f3151 0%, #29476b 40%, #0c4f38 75%, #00703f 100%)', color: '#fff', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700 }}>
         Go to sign in
@@ -142,7 +177,8 @@ export default function Signup() {
   const formBody = !done ? (
     <>
       {employmentTypeSelector}
-      {employeeIdField}
+      {emailField}
+      {privacyAcknowledgment}
       {errorMessage}
       {submitButton}
     </>
@@ -172,7 +208,7 @@ export default function Signup() {
             </div>
             <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 20, fontWeight: 800, color: '#1f3151', textAlign: 'center', marginTop: 20 }}>Create your account</div>
             <div style={{ fontSize: 13, color: '#4a5568', marginTop: 8, lineHeight: 1.6, textAlign: 'center' }}>
-              Complete your employee setup using your official VMMC employee ID.
+              Complete your employee setup using your official VMMC email address.
             </div>
           </motion.div>
 
@@ -194,7 +230,7 @@ export default function Signup() {
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 28, fontWeight: 800, color: '#1f3151' }}>Create your account</div>
             <div style={{ fontSize: 13, color: '#4a5568', marginTop: 8, lineHeight: 1.6 }}>
-              Complete your employee setup using your official VMMC employee ID.
+              Complete your employee setup using your official VMMC email address.
             </div>
           </div>
 
