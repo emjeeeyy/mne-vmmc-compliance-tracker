@@ -186,7 +186,17 @@ export default function Login() {
   const employeeIdField = (
     <div style={{ marginBottom: 16 }}>
       <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Employee ID</label>
-      <input value={employeeId} onChange={e => setEmployeeId(e.target.value)} placeholder="Enter ID number"
+      <input value={employeeId} placeholder="Enter ID number"
+        // Employee IDs are all capitals (VMMC-25-0024), so whatever is typed or pasted shows as capitals: nobody has to
+        // mind Caps Lock. Same length in and out, so the caret is put back where it was (setting a changed value on a
+        // controlled input would otherwise throw it to the end). The backend folds case too, so this is only for the eye.
+        onChange={e => {
+          const input = e.currentTarget
+          const { selectionStart, selectionEnd } = input
+          setEmployeeId(input.value.toUpperCase())
+          requestAnimationFrame(() => { if (document.activeElement === input) input.setSelectionRange(selectionStart, selectionEnd) })
+        }}
+        autoCapitalize="characters" autoCorrect="off" spellCheck={false}
         style={{ width: '100%', padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
         onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
         onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}

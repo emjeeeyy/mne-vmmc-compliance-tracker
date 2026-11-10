@@ -766,6 +766,54 @@ Not yet tested: a real login with the real emailed code.
 
 ---
 
+## Part W — The mobile-number field puts `+63` in front by itself
+
+**Request:** typing a Philippine mobile number in Account Settings should add `+63` automatically, which means the leading `0` is no longer typed.
+
+**The cause was a mismatch, not a typo.** The field was a plain text box and the backend validates `phone` with `@IsPhoneNumber()` and no region, which only accepts international form (`+63…`). Anyone typing the local form (`09171234567`), and anyone saving with the field blank (the form sent `phone: ""`, and `@IsOptional()` only skips `undefined`/`null`), got the raw API message "phone must be a valid phone number".
+
+### What changed
+
+- **New pure helpers in `src/lib/phone.ts`** (`toNationalDigits`, `toE164`, `isValidPhMobile`) with 27 unit tests. A national PH mobile number starts with 9, so a leading `0` and a leading `63` can be stripped safely. The `63` is only treated as a country code when it is clearly one (typed with a `+`, or the digit string is longer than 10), so someone typing the first digits of a number is never fought.
+- **The field.** A fixed `+63` sits in front of a `type="tel"`, `inputmode="numeric"` input capped at 10 digits. State holds `+639XXXXXXXXX` (or empty, never a bare `+63`); the input shows the digits after the prefix. A paste of `+63 917 123 4567`, `639171234567` or `0917 123 4567` all land as `917 123 4567`.
+- **Save.** Blank is allowed and not sent. Anything typed must be 10 digits starting with 9, otherwise an explanatory message shows instead of the API's. The label is now linked to its field, and the error is announced (`role="alert"`).
+- **No backend change.** The number is already sent in the form the backend wants. Numbers saved earlier as `09…` or `+63 917 …` reload correctly and are rewritten as `+639…` on the next save.
+
+### Checked and not checked
+
+Frontend typecheck clean; 93/93 frontend unit tests at the time of this part (66 before; 95 after Part X). **Not** checked in a real browser: logging in needs the email OTP, so the field's look and focus ring have not been seen. **Open:** clearing the field does not remove a saved number (blank is simply not sent); Forgot Password keeps its own 11-digit `09…` rule; the backend still accepts any international number (`@IsPhoneNumber('PH')` would restrict it to PH).
+
+---
+
+## Part X — The navbar kept the old name after a profile save
+
+**Found by using it:** changing the display name from "Test Staff" to "Nurse Edith" in Account Settings saved, and the Profile screen showed the new name, but the navbar kept showing the old one.
+
+**Cause:** two copies of the name. The database (updated by `PATCH /me/profile`) and the session shell in `sessionStorage` that `Layout.tsx` reads through `getUser()`. That shell is written once, by `login()`, and nothing rewrote it after a save. `Layout.tsx` only re-reads it when the route changes, and even then it re-reads the stale copy. So the name was right in the database and wrong in the navbar until the next login. Nothing failed, so no test or typecheck could have caught it.
+
+**Fix:** `updateUser()` in `src/lib/auth.ts` rewrites the stored name/email (through the pure, unit-tested `withUserUpdate`) and dispatches a `vmmc:user-updated` event; `Layout.tsx` listens for it and re-reads. `Profile.tsx` calls it after a successful save. No backend change. Typecheck clean; 95/95 frontend unit tests.
+
+**Not covered:** only this save path refreshes the shell. A name changed any other way (an admin editing the employee, an approved change request) still shows stale until the next login, and so does `ModulesRegistry.tsx`'s "printed by" name if the tab was open before the change. Not checked in a real browser (login needs the email OTP).
+
+---
+
+## Part Y — Employee ID at login: capitals shown, case ignored
+
+**Request:** make the login Employee ID field always show capital letters, so nobody has to fix Caps Lock; and is that safe?
+
+**Safe, with one condition.** An Employee ID is not a secret (Part V already relies on that), so folding its case gives an attacker nothing: the password is what protects the account, and passwords are untouched. What would have been a mistake is doing it only in the browser. The backend lookup was `.eq('employee_id', typedValue)`, an exact case-sensitive match, so the screen could show `VMMC-25-0024` while a password manager, a script or any other client sending `vmmc-25-0024` still failed.
+
+### What changed
+
+- **`Login.tsx`:** the Employee ID input upper-cases whatever is typed or pasted (`autoCapitalize="characters"` also raises the capital keyboard on phones; autocorrect and spellcheck off). Upper-casing doesn't change the length, so the caret is restored to where it was, otherwise editing in the middle of the ID would throw the cursor to the end.
+- **Backend:** `findEmployeeByEmployeeId` now runs the typed ID through `normalizeEmployeeId` (trim, upper-case), the one place login, OTP verification and the first-login password change all look an employee up. 6 new unit tests (181 backend, 95 frontend).
+- **Why not `ilike`:** it would be the obvious one-line case-insensitive match, but `%` and `_` in the typed ID are wildcards, so a crafted ID could match a real employee. A plain `.eq` on the folded value has no such gap.
+- **No format validation on purpose.** `validateEmployeeId` (used by signup) throws a 400 that spells out the ID format. At login a malformed ID just fails to match and gets the same generic message as a wrong one.
+
+Typecheck clean in both repos. **Live data checked (2026-11-08):** `select employee_id from employees where employee_id <> upper(employee_id)` returned no rows, so every stored ID is already upper-case and the case-folding cannot make any existing account unreachable. (Rows with an empty `employee_id`, roster entries that haven't signed up yet, are not matched by that query and cannot log in either way.) **Live login checked (2026-11-08), API level, real emailed code:** `POST /auth/login` with `vmmc-25-0024` (lower-case) returned `mfaRequired: true` with the canonical `VMMC-25-0024`, and `POST /auth/verify-login-otp` with the lower-case ID and the code from the real inbox returned 200 with a session for `VMMC-25-0024` (STAFF). So the backend half is verified end to end. **Still not checked:** the login screen's own behaviour in a browser (the field showing capitals as you type, and the caret staying put when editing mid-ID).
+
+---
+
 ## Current status
 
 Everything through Part D is live on `main` and deployed (Vercel + Railway, linked and confirmed working via a real cross-origin login). Parts E and F (real 2FA, defaulting on) are live on `main` as of `497dff6`. Part G (the production login-hang incident: bounded/non-blocking email sends, then the IPv4-forcing attempt, then the full Brevo provider swap) is pushed as `fc9b024`/`98cb866`/`ab4a29b` and **confirmed working live in production** — a real deployed login now completes end to end with 2FA, including actual email delivery. Parts H through J (Enter-key submit, Hep B Titers, and the staff landing page + Upload redesign) are all complete and fully verified live — through both `curl` and the real browser UI — but **not yet committed/pushed**, pending the user's go-ahead per the standing push-confirmation rule. Part K (the sidebar → single top-band header plus the staff dashboard rebuilt to match the mockup) is complete, checked side by side against the mockup at 1440px and screenshotted at 1024 to 1920px, and also unpushed. The Upload screen's own mockup pass is next. One deliberately-deferred open item on record: department compliance rate/pending-count are currently not shown anywhere on the desktop staff dashboard (Part J), left that way at the user's explicit request, to revisit later. No other outstanding failures or known-broken state as of this entry.

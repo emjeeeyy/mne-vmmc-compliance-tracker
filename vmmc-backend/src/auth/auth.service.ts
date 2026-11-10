@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { AuditService } from '../audit/audit.service';
-import { getNextEmployeeId, validateEmployeeId } from '../common/assert-access';
+import { getNextEmployeeId, normalizeEmployeeId, validateEmployeeId } from '../common/assert-access';
 import { describeUserAgent } from '../common/describe-user-agent';
 import { EmailChannel } from '../notifications/channels/email.channel';
 import { buildLoginOtpEmail } from '../notifications/email-templates/login-otp.template';
@@ -477,7 +477,7 @@ export class AuthService {
       .getClient()
       .from('employees')
       .select('id, auth_user_id, employee_id, full_name, job_title, email, phone, role, department_id, must_change_password, two_factor_enabled')
-      .eq('employee_id', employeeId)
+      .eq('employee_id', normalizeEmployeeId(employeeId))
       .maybeSingle();
     return data as EmployeeRow | null;
   }

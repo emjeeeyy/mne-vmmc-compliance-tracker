@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import VmmcSeal from './VmmcSeal'
 import { Home, ClipboardList, UserCircle, ChevronDown, Menu, X, Folder, Bell, User, Users, FileText, LogOut, TrendingUp, CheckSquare, Briefcase, CircleUserRound } from 'lucide-react'
-import { getRole, getUser, getInitials, logout } from '@/lib/auth'
+import { getRole, getUser, getInitials, logout, USER_UPDATED_EVENT } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { notificationStyle, timeAgo, type NotificationItem } from '@/lib/notifications'
 
@@ -94,11 +94,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const [employeeId, setEmployeeId] = useState('')
 
   useEffect(() => {
-    setRole(getRole())
-    const user = getUser()
-    setFullName(user?.fullName ?? '')
-    setJobTitle(user?.jobTitle ?? '')
-    setEmployeeId(user?.employeeId ?? '')
+    const readUser = () => {
+      setRole(getRole())
+      const user = getUser()
+      setFullName(user?.fullName ?? '')
+      setJobTitle(user?.jobTitle ?? '')
+      setEmployeeId(user?.employeeId ?? '')
+    }
+    readUser()
+    // Re-read when the profile is saved, so the navbar name changes without a navigation or a re-login.
+    window.addEventListener(USER_UPDATED_EVENT, readUser)
+    return () => window.removeEventListener(USER_UPDATED_EVENT, readUser)
   }, [pathname])
 
   useEffect(() => {

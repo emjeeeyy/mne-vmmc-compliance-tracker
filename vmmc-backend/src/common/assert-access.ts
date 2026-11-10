@@ -60,6 +60,16 @@ export function validateEmployeeId(employeeId: string, expectedType?: Employment
 }
 
 /**
+ * Folds an Employee ID typed at login (and OTP / first-login) to the stored form: trimmed and upper-case, so
+ * "vmmc-25-0024" finds VMMC-25-0024. Deliberately does NOT validate the format (unlike validateEmployeeId, which
+ * throws a 400 that spells out the format rules): a malformed ID should just fail to match, with the same generic
+ * "Invalid Employee ID or password" as a wrong one. Never apply this to passwords; those stay case-sensitive.
+ */
+export function normalizeEmployeeId(raw: string): string {
+  return (raw ?? '').trim().toUpperCase();
+}
+
+/**
  * Distinguishes the employee ID format used for permanent staff versus COS staff.
  * Permanent staff keep the legacy VMMC-YY-NNNN shape; COS entries are explicitly tagged.
  */

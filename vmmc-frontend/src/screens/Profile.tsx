@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Lock, Smartphone, Shield, Activity, Check, User, LogOut, Clock, ChevronRight, ChevronLeft, Eye, X, Info, FileEdit, ShieldCheck, IdCard, RefreshCw, KeyRound, Download, Database, FileText, AlertCircle, UserCheck, Contact } from 'lucide-react'
 import { fadeRise } from '@/lib/motion'
-import { logout, getRole, getPreciseRole, getInitials, type PreciseRole } from '@/lib/auth'
+import { logout, getRole, getPreciseRole, getInitials, updateUser, type PreciseRole } from '@/lib/auth'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
 import { formatBirthDate, calculateAge, formatLogTime, toCsv } from '@/lib/format'
+import { PH_COUNTRY_CODE, isValidPhMobile, toE164, toNationalDigits } from '@/lib/phone'
 
 function apiErrorMessage(err: unknown, fallback: string) {
   if (err instanceof ApiError) return err.message || fallback
@@ -429,10 +430,19 @@ export default function Profile() {
 
   const handleSave = async () => {
     setSaveError('')
+    // The number is optional: blank is simply not sent. Anything typed must be a full PH mobile number, and is
+    // sent as +639XXXXXXXXX (the backend's @IsPhoneNumber() rejects the local 09... form).
+    if (phone && !isValidPhMobile(phone)) {
+      setSaveError(`Enter a 10-digit mobile number after ${PH_COUNTRY_CODE}, starting with 9 (e.g. 917 123 4567).`)
+      return
+    }
     try {
-      await api.patch('/me/profile', { fullName: displayName, email, phone })
+      await api.patch('/me/profile', { fullName: displayName, email, ...(phone ? { phone: toE164(phone) } : {}) })
+      setPhone(toE164(phone))
+      updateUser({ fullName: displayName, email }) // so the navbar shows the new name right away
       setSaved(true)
-      setTimeout(() => setSaved(false), 2200)
+      // Show "Saved!" briefly, then close the window (same as the password window: success message, then it closes).
+      setTimeout(() => { setSaved(false); closeModal() }, 1400)
     } catch (err) {
       setSaveError(apiErrorMessage(err, 'Could not save changes. Please try again.'))
     }
@@ -1652,21 +1662,44 @@ export default function Profile() {
               {activeModal === 'account' && (
                 <div>
                   {[
-                    { label: 'Display Name', value: displayName, onChange: setDisplayName },
-                    { label: 'Email Address', value: email, onChange: setEmail },
-                    { label: 'Mobile Number', value: phone, onChange: setPhone },
+                    { id: 'acct-name', label: 'Display Name', value: displayName, onChange: setDisplayName },
+                    { id: 'acct-email', label: 'Email Address', value: email, onChange: setEmail },
                   ].map(f => (
                     <div key={f.label} style={{ marginBottom: 16 }}>
-                      <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>{f.label}</label>
+                      <label htmlFor={f.id} style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>{f.label}</label>
                       <input
+                        id={f.id}
                         value={f.value}
                         onChange={e => f.onChange(e.target.value)}
                         style={{ width: '100%', padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 13, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
                       />
                     </div>
                   ))}
+                  {/* Mobile number: a fixed +63 sits in front, so the person types only the 10 digits after it. A leading 0
+                      or a pasted +63 is dropped (see src/lib/phone.ts), which is also the format the backend requires. */}
+                  <div style={{ marginBottom: 16 }}>
+                    <label htmlFor="acct-phone" style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>Mobile Number</label>
+                    <div
+                      className="focus-within:outline-2 focus-within:outline-offset-1 focus-within:outline-[#006042]"
+                      style={{ display: 'flex', alignItems: 'center', border: '1px solid #e2e8f0', borderRadius: 12, background: '#f8fafc', overflow: 'hidden' }}
+                    >
+                      <span aria-hidden="true" style={{ padding: '12px 0 12px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', userSelect: 'none' }}>{PH_COUNTRY_CODE}</span>
+                      <input
+                        id="acct-phone"
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        aria-label={`Mobile number (country code ${PH_COUNTRY_CODE} is added automatically)`}
+                        placeholder="9XX XXX XXXX"
+                        value={toNationalDigits(phone)}
+                        onChange={e => setPhone(toE164(e.target.value))}
+                        className="placeholder:text-[#767676]"
+                        style={{ flex: 1, minWidth: 0, padding: '12px 14px 12px 8px', border: 'none', fontSize: 13, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', outline: 'none', background: 'transparent' }}
+                      />
+                    </div>
+                  </div>
                   {saveError && (
-                    <p style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 12 }}>{saveError}</p>
+                    <p role="alert" style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 12 }}>{saveError}</p>
                   )}
                   <button
                     onClick={handleSave}

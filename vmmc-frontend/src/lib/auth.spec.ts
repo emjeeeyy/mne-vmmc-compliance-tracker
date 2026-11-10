@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { getInitials } from './auth'
+import { getInitials, withUserUpdate, type AuthSession } from './auth'
+
+describe('withUserUpdate', () => {
+  const session: AuthSession = {
+    accessToken: '',
+    expiresAt: 9999999999,
+    mustChangePassword: false,
+    user: { id: 'u1', employeeId: 'VMMC-25-0024', fullName: 'Test Staff', jobTitle: 'Staff Nurse', email: 'old@example.com', role: 'STAFF', departmentId: 'd1' },
+  }
+
+  it('replaces the name and email and leaves every other field alone', () => {
+    const next = withUserUpdate(session, { fullName: 'Nurse Edith', email: 'new@example.com' })
+    expect(next.user).toEqual({ ...session.user, fullName: 'Nurse Edith', email: 'new@example.com' })
+    expect(next.expiresAt).toBe(session.expiresAt)
+    expect(next.mustChangePassword).toBe(false)
+  })
+
+  it('does not mutate the session it was given', () => {
+    withUserUpdate(session, { fullName: 'Nurse Edith' })
+    expect(session.user.fullName).toBe('Test Staff')
+  })
+})
 
 describe('getInitials', () => {
   it('takes the first letter of the first and last name', () => {

@@ -53,6 +53,23 @@ export function setPasswordChangeRequired(required: boolean) {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
 }
 
+/** Fired on `window` after the stored user changes, so already-mounted UI (the navbar) can re-read it. */
+export const USER_UPDATED_EVENT = 'vmmc:user-updated'
+
+/** The session with the self-editable identity fields replaced (pure, so it can be unit-tested). */
+export function withUserUpdate(session: AuthSession, patch: Partial<Pick<AuthUser, 'fullName' | 'email'>>): AuthSession {
+  return { ...session, user: { ...session.user, ...patch } }
+}
+
+/** Call after a successful `PATCH /me/profile`. The navbar reads the name from the session shell written at login,
+ * so without this it keeps showing the old name until the person logs out and back in. */
+export function updateUser(patch: Partial<Pick<AuthUser, 'fullName' | 'email'>>) {
+  const session = readSession()
+  if (!session) return
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(withUserUpdate(session, patch)))
+  window.dispatchEvent(new Event(USER_UPDATED_EVENT))
+}
+
 export function logout() {
   const session = readSession()
   sessionStorage.removeItem(STORAGE_KEY)
