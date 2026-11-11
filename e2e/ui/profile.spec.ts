@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { TEST_ACCOUNTS, login, visibleText } from './helpers'
+import { nameOf, signInAs, visibleText } from './helpers'
 
 // Regression coverage for a real bug found in this build: Layout.tsx's header pill and
 // Profile.tsx's profile card had "Juan Dela Cruz, RN" / "Dr. Arturo V." hardcoded from the
@@ -7,23 +7,23 @@ import { TEST_ACCOUNTS, login, visibleText } from './helpers'
 // data — every logged-in user saw someone else's name. See docs/SYSTEM_ARCHITECTURE.md §7.
 test.describe('Profile identity', () => {
   test('staff sees their own real name and job title, not a hardcoded mock identity', async ({ page }) => {
-    await login(page, { ...TEST_ACCOUNTS.staff, portal: 'staff' })
+    await signInAs(page, 'staff')
     await page.goto('/profile')
 
-    await expect(visibleText(page, TEST_ACCOUNTS.staff.fullName)).toBeVisible()
+    await expect(visibleText(page, nameOf('staff'))).toBeVisible()
     await expect(page.getByText('Juan Dela Cruz', { exact: false })).toHaveCount(0)
   })
 
   test('admin sees their own real name and job title, not a hardcoded mock identity', async ({ page }) => {
-    await login(page, { ...TEST_ACCOUNTS.admin, portal: 'admin' })
+    await signInAs(page, 'admin')
     await page.goto('/profile')
 
-    await expect(visibleText(page, TEST_ACCOUNTS.admin.fullName)).toBeVisible()
+    await expect(visibleText(page, nameOf('admin'))).toBeVisible()
     await expect(page.getByText('Dr. Arturo', { exact: false })).toHaveCount(0)
   })
 
   test('admin Profile shows the system-wide audit trail with real rows', async ({ page }) => {
-    await login(page, { ...TEST_ACCOUNTS.admin, portal: 'admin' })
+    await signInAs(page, 'admin')
     await page.goto('/profile')
 
     await expect(visibleText(page, /system activity & audit trail/i)).toBeVisible()

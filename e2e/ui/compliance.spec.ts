@@ -1,16 +1,16 @@
 import { test, expect } from '@playwright/test'
-import { TEST_ACCOUNTS, login, visibleText } from './helpers'
+import { nameOf, signInAs, visibleText } from './helpers'
 
 test.describe('Compliance Tracker', () => {
   test('staff sees their own compliance record', async ({ page }) => {
-    await login(page, { ...TEST_ACCOUNTS.staff, portal: 'staff' })
+    await signInAs(page, 'staff')
     await page.goto('/compliance')
 
-    await expect(visibleText(page, TEST_ACCOUNTS.staff.fullName)).toBeVisible()
+    await expect(visibleText(page, nameOf('staff'))).toBeVisible()
   })
 
   test('admin sees the Modules Registry with real rows', async ({ page }) => {
-    await login(page, { ...TEST_ACCOUNTS.admin, portal: 'admin' })
+    await signInAs(page, 'admin')
     await page.goto('/compliance')
 
     await expect(visibleText(page, /occupational health screening modules/i)).toBeVisible()
@@ -22,7 +22,7 @@ test.describe('Compliance Tracker', () => {
   })
 
   test('admin Notifications page replaces the old PII Index and lists escalations', async ({ page }) => {
-    await login(page, { ...TEST_ACCOUNTS.admin, portal: 'admin' })
+    await signInAs(page, 'admin')
     await page.goto('/notifications')
 
     await expect(visibleText(page, /notification & screening reminder engine/i)).toBeVisible()

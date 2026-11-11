@@ -5,6 +5,10 @@ const BACKEND_URL = 'http://localhost:8443'
 
 export default defineConfig({
   testDir: './e2e',
+  // Signs the test accounts in once through 2FA before the tests, and tidies the login-code rows afterwards (see
+  // e2e/support/login-code.ts for how the emailed code is handled without turning 2FA off).
+  globalSetup: './e2e/global-setup.ts',
+  globalTeardown: './e2e/global-teardown.ts',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

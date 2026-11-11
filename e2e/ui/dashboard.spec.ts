@@ -1,9 +1,10 @@
 import { test, expect } from '@playwright/test'
-import { TEST_ACCOUNTS, login, visibleText } from './helpers'
+import { signInAs, visibleText } from './helpers'
 
 test.describe('Dashboard', () => {
   test('staff dashboard shows the real screening progress card, not a stuck skeleton', async ({ page }) => {
-    await login(page, { ...TEST_ACCOUNTS.staff, portal: 'staff' })
+    await signInAs(page, 'staff')
+    await page.goto('/dashboard')
     await expect(page).toHaveURL(/\/dashboard/)
 
     // The skeleton loading state (see src/components/Skeleton.tsx) is deliberately transient —
@@ -13,7 +14,8 @@ test.describe('Dashboard', () => {
   })
 
   test('admin Health Overview shows the department clearance chart', async ({ page }) => {
-    await login(page, { ...TEST_ACCOUNTS.admin, portal: 'admin' })
+    await signInAs(page, 'admin')
+    await page.goto('/dashboard')
     await expect(page).toHaveURL(/\/dashboard/)
 
     await expect(visibleText(page, /department health clearance status/i)).toBeVisible()
