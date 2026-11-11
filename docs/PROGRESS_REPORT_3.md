@@ -762,7 +762,7 @@ The forgot-password screen had a "Resend" link; the login 2FA step did not. The 
 
 On the laptop login, axe still flags the grey intro text above the form ("Input your secure credentials below…", `#718096` on white, 4.0:1) and, on the password step, three more small grey or green texts. That intro text also stays on screen during the code step. These were there before this change and were left alone; they are a quick colour clean-up if wanted. Also worth knowing: every new code (a resend, or logging in again) starts with a fresh budget of 5 wrong guesses, and the only request limit is the global 120 requests per minute. Someone who already has an account's password could therefore keep asking for new codes and keep guessing. It is a long shot (each code is 1 in a million, and they need the password first), but a per-account limit on how often a login code can be issued would close it. Not done; this change only makes the existing path visible.
 
-**The e2e suite is red, and has been since 2FA went on for everyone (found by running `/verify` before pushing).** `npm run test:e2e` gives 12 failed and 6 passed. Every failure is a login: the UI specs wait for `/dashboard` and the API test gets no `accessToken`, because a correct password now returns `mfaRequired` and the suite cannot read the emailed code. It is not a data problem: the suite logs in as `VMMC-25-0021` and `-0022`, which have real inboxes (checked in the database); all 26 accounts have 2FA on, and the 20 seed accounts with fictional `@vmmc.gov.ph` emails cannot complete a login at all. The 6 tests that pass are the ones that never reach the code step (health check, wrong password, wrong portal, no token). Two consequences: nothing behind login has automated browser coverage right now (this part's checks were mocked-API runs, not committed), and every run with Brevo configured emails real login codes to those two inboxes. No CI runs the suite, which is why it went unnoticed. Suggested fix, not built: use the dedicated test accounts and a helper that overwrites the newest `login_otps` hash with a known code through the service-role key, so 2FA stays on and the code step is still exercised.
+**The e2e suite is red, and has been since 2FA went on for everyone (found by running `/verify` before pushing).** `npm run test:e2e` gives 12 failed and 6 passed. Every failure is a login: the UI specs wait for `/dashboard` and the API test gets no `accessToken`, because a correct password now returns `mfaRequired` and the suite cannot read the emailed code. It is not a data problem: the suite logs in as `VMMC-25-0021` and `-0022`, which have real inboxes (checked in the database); all 26 accounts have 2FA on, and the 20 seed accounts with fictional `@vmmc.gov.ph` emails cannot complete a login at all. The 6 tests that pass are the ones that never reach the code step (health check, wrong password, wrong portal, no token). Two consequences: nothing behind login has automated browser coverage right now (this part's checks were mocked-API runs, not committed), and every run with Brevo configured emails real login codes to those two inboxes. No CI runs the suite, which is why it went unnoticed. Suggested fix (built later, Part AB): use the dedicated test accounts and a helper that overwrites the newest `login_otps` hash with a known code through the service-role key, so 2FA stays on and the code step is still exercised.
 
 Not yet tested: a real login with the real emailed code.
 
@@ -875,6 +875,92 @@ Two things were mixed up. The internal event's message was "Tracking window open
 
 - The 10 premature events cannot be deleted (append-only by design). Their in-app notifications can be, so the bell stops showing a false notice; that deletes live data, so it waits for approval of the exact rows.
 - Backend only: nothing to deploy on the frontend. The next nightly scan (midnight Asia/Manila) is the first to run without it.
+
+---
+
+## Part AB — The e2e suite signs in through 2FA again (20 of 20 pass)
+
+### The problem
+
+`npm run test:e2e` had 12 of 18 tests failing, every one a login. 2FA is on for every account (since 2026-10-06), so a correct password only reaches "enter the code from your email", and a test cannot read an inbox. Nobody noticed for weeks because no CI runs the suite. Each run also emailed real login codes to the two groupmates' inboxes (`VMMC-25-0021` and `-0022`).
+
+### What changed (all under `e2e/`, plus `playwright.config.ts`; no app code)
+
+- **The code is handled without turning 2FA off and without a bypass in the backend.** After the password step the backend has already stored a hash of the code it issued. The test waits for that row, overwrites the hash with the hash of a code the test knows (`e2e/support/login-code.ts`, using the service-role key the backend already needs), and then submits that code to the real `POST /auth/verify-login-otp` (or types it into the real screen). The code is verified exactly as for a person; the real email still goes out and is ignored. A hidden "skip the code" switch in the login path was rejected as a security hole waiting to be left on.
+- **Sign in once, reuse.** `e2e/global-setup.ts` logs the staff and admin test accounts in once through the real API (2FA included) and hands the sessions to the workers through the environment (nothing is written to disk). Most specs call `signInAs(page, role)`, which sets the same two things a real login leaves behind: the HttpOnly `vmmc_session` cookie and the session shell in `sessionStorage`. The login screen itself is still tested end to end, once per account, in `login.spec.ts` (it types the code into the real six-box field). That is 6 emailed codes per run instead of about 14.
+- **A code is single-use and only the newest counts, so two parallel logins as one account break each other.** Each flow therefore has its own account: `VMMC-25-0024` (staff) and `-0026` (admin) for the UI, `-0025` (unit head) only for the API login-flow tests, which run serially. This is also why the suite no longer touches the groupmates' accounts; all three are the dedicated test accounts, with their own inboxes.
+- **Names are read from the session, not hardcoded.** `VMMC-25-0024` is no longer called "Test Staff" (it was renamed through Profile), and a hardcoded name would have broken the next rename.
+- **New API tests for the 2FA contract itself:** a correct password alone returns `mfaRequired` and no token and no cookie; a wrong code is rejected with 400; the right code returns a real token and the right role. The old "valid credentials return a token" test could not stay as written, because that is exactly what 2FA now forbids.
+- **Teardown** deletes the `login_otps` rows the run created (each one stores the session token issued with it).
+- Root `package.json`: `@supabase/supabase-js` and `bcryptjs` added as dev dependencies (same versions as the backend).
+
+### Verified
+
+`npm run test:e2e`: 20 passed, twice in a row (38 s, then 23 s), run in parallel on 4 workers. Previously 12 failed and 6 passed.
+
+### To know
+
+- The e2e suite now needs `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (read from `vmmc-backend/.env`, or the shell). Use a development database only: the helper overwrites login codes.
+- Each run still emails about 6 real codes, now to the three dedicated test inboxes.
+- **A cold-start flake, found and fixed.** The first run against a freshly started frontend failed the two login-screen specs (18 passed, 2 failed): the screenshot showed a blank login form with the staff tab selected during the admin test, meaning the page had reloaded itself mid-login. On a freshly started dev server each page compiles on its first request, and when several parallel tests trigger that at once webpack reloads the pages already open, wiping a login form being filled in. The two earlier green runs had used a warm server. Fix (setup only, not the app): `e2e/global-setup.ts` now requests every page the specs use, one at a time, before any test starts. Two cold-start runs afterwards: 20 of 20 both times (27 s, 25 s).
+- Not fixed here: `login_otps` already held 87 old rows (from earlier runs and real logins, each with a stored session token); nothing prunes that table. The shell-quote advisory that `npm audit` shows at the repo root comes from `concurrently` (the `npm run dev` helper) and predates this change.
+
+---
+
+## Part AC — Only the TB DOTS administrator can approve or reject a document
+
+### The problem
+
+`PATCH /documents/:id/review` allowed `ADMIN` and also `UNIT_HEAD` (for their own department's documents). That was a half-feature:
+- A unit head could never approve: approving needs a saved digital signature, and the signature endpoints (`GET/POST/DELETE /me/signature`) are ADMIN-only, so they could never get a `signatureId`.
+- A unit head could reject, which needs no signature. Through the API they could reject any pending document in their department, and the staff member got a rejection notice. No screen offered it: the review queue only shows for admins (a unit head is in the staff portal and sees the upload form), so it was an unintended permission, not a feature.
+- The architecture doc already said "some routes are ADMIN-only outright (e.g. reviewing documents)". The code disagreed with its own documentation.
+
+### The decision
+
+Clearing someone is a signed sign-off by the TB DOTS unit (the `ADMIN` role). The build spec gives the Review Queue and the digital signature to the TB Head (Dr. Arturo V., mapped to ADMIN); the unit head ("Nurse Unit Supervisor") has department oversight, meaning their staff's status and escalations. It also fits Part Z: the reviewer now reads the file and records the X-ray, GeneXpert or titer result, and a nurse supervisor should not be the one signing off those readings. Letting unit heads approve instead would need signatures for them (the `digital_signatures` table is keyed by `admin_id`), a new queue screen, and a decision on who may read results. That stays a business decision for the hospital if they ever want it.
+
+### What changed (backend only, no migration, nothing on screen)
+
+- The route is now `@Roles('ADMIN')`, and `DocumentsService.review()` refuses any non-admin first thing, before reading the database, so a refused caller learns nothing about whether a document exists. The department lookup that supported the unit-head path was removed.
+- Tests: a unit head of the same department, a unit head of another department and a plain staff member are each refused for both approve and reject, with no database call made and nothing signed or classified; an admin can still reject; a controller test pins the route's role list at `['ADMIN']`, so the decorator cannot quietly widen again. 205 backend tests pass; `tsc` clean.
+- Live check against the running backend with a non-existent document id (nothing can change): the unit head and the staff account get 403 for approve and for reject; the admin gets 404 "Document not found".
+
+### Unchanged on purpose
+
+Unit heads keep what they had: their department's staff status, escalations, and view access to department documents (the Aug 31 access rules). `GET /review-queue` still returns what each role may see; it is only the acting on a document that is admin-only.
+
+---
+
+## Part AD — The reminder and target settings in the database are now read
+
+### The problem
+
+`sla_definitions` held settings the code never used. Checked against the code and the live rows:
+- **Read:** only `first_reminder_days_before_birthday` and `active`, and only from the annual exam (APE) row, to compute each person's window date.
+- **Never read:** `weekly_reminder` (the on/off switch), `target_rate` (0.95), `recurrence`, and the whole IMMUNIZATION row.
+- **Hard-coded:** the gap between weekly reminders was a constant of 7 days in the classifier (3 weekly reminders have gone out so far). The "Goal: 95% Occupational Safety Standard" on the admin dashboard was typed text, and the tile under "Upcoming Due" said "Reminders dispatch weekly" whatever the setting.
+
+### What changed
+
+- **New `SlaSettingsService`** (`src/compliance/sla-settings.service.ts`) reads the APE row once a minute at most (so a database edit takes effect without a redeploy, and a scan does not query per record) and turns it into `{ weeklyReminderEnabled, weeklyReminderIntervalDays, targetPercent }`. A pure `parseApeSlaSettings()` clamps anything missing or out of range to the old behaviour (7 days, on, 95), so a typo in a settings row cannot stop the nightly scan or the dashboard.
+- **Weekly reminder:** the classifier now honours the on/off switch and the gap. The birthday-day and overdue notices do not depend on it. With the shipped values (on, 7) behaviour is unchanged.
+- **New column** `weekly_reminder_interval_days` (default 7, 1 to 90) so the gap is a setting too: migration `20261112000000_weekly_reminder_interval.sql`, additive. The same migration puts a comment on the table saying which columns the app reads.
+- **Deploy order does not matter.** If the column does not exist yet the service retries without it and keeps 7. Verified live against the real database, where the migration has not been applied yet: `GET /dashboard/overview` returned the target 95 (from `target_rate`) and a 7-day cadence (from the fallback).
+- **Admin dashboard:** `GET /dashboard/overview` now returns `hospitalCompliance.targetPercent` and `reminderCadence`. The Screening Compliance card shows "Clearance target: 90% · 8 points below target" (or "Target met"), the phone card says "Goal: N% ... · N points below target" with the stored value, and the Upcoming Due tile reads "Reminders dispatch weekly", "Reminders every N days", "Reminders dispatch daily" or "Weekly reminders are off" to match. An older backend that sends neither field still renders with 95 and "weekly".
+
+### Deliberately not wired
+
+The **IMMUNIZATION row and `recurrence`** are not read. Immunization reminders work differently: each dose carries its own `next_due_date`, and one alert fires when a dose is overdue. Making the stored "14 days before / weekly / quarterly" values real would be a new feature (early and weekly immunization reminders), not wiring. The table comment in the migration and `SlaSettingsService`'s header say so, so nobody edits those values expecting an effect. There is also no settings screen: the values are edited in the database.
+
+### Verified
+
+Backend: 217 tests pass (new `sla-settings.service.spec.ts`: parsing, the missing-column fallback, no-row and read-error defaults, the one-minute cache; and four classifier tests: a shorter gap fires sooner, a longer one holds back, switched off sends nothing, and switching off does not stop the birthday-day notice). Frontend: 109 tests pass (new `lib/compliance-target.ts` helpers). `tsc` clean in both. Browser check with a mocked API (laptop and phone): the stored target and gap, "Target met", the off and custom cadence wording, the older-backend fallback, axe clean.
+
+### Applied, and one thing to know
+
+- **The migration has been applied** to the app's Supabase project (`uharvyvowvmrplkhplti`) by the project owner through the SQL Editor. Confirmed on 2026-11-12 with read-only checks: the column exists and both rows hold 7; the compiled `SlaSettingsService`, run against the real database, needed a single query (the full read including the new column, no fallback); the running backend's admin overview returned a target of 95 and a weekly 7-day cadence, and its log shows no fallback warning. A live change-and-restore test of the settings was not run, because it edits shared live data; that the service follows a changed value (a shorter gap sends sooner, off sends nothing, a re-read after a minute) is covered by the unit tests. To see it live: `update sla_definitions set weekly_reminder_interval_days = 3 where tracking_type = 'APE';`, wait a minute, reload the admin dashboard ("Reminders every 3 days"), then set it back to 7.
+- **The Supabase connection available to Claude in this session is attached to a different project** (`tesmadjsqgphplxxnzml`, another account's), not the app's. Nothing was run through it except listing projects, and the migration was not applied there. Anything applied through that connector would have changed the wrong database.
 
 ---
 
