@@ -790,21 +790,24 @@
                     "enum": [
                       "CLEARED",
                       "INFILTRATE"
-                    ]
+                    ],
+                    "description": "Optional pre-fill; the reviewer records the result."
                   },
                   "genexpertResult": {
                     "type": "string",
                     "enum": [
                       "NOT_DETECTED",
                       "DETECTED"
-                    ]
+                    ],
+                    "description": "Optional pre-fill; the reviewer records the result."
                   },
                   "titerResult": {
                     "type": "string",
                     "enum": [
                       "REACTIVE",
                       "NON_REACTIVE"
-                    ]
+                    ],
+                    "description": "Optional pre-fill; the reviewer records the result."
                   },
                   "title": {
                     "type": "string"
@@ -2047,6 +2050,30 @@
           "signatureId": {
             "type": "string",
             "description": "Required when action is \"approve\" — the admin's digital_signatures id."
+          },
+          "cxrResult": {
+            "type": "string",
+            "enum": [
+              "CLEARED",
+              "INFILTRATE"
+            ],
+            "description": "The reviewer's reading of the chest X-ray. On approval an annual physical exam needs this or the GeneXpert result."
+          },
+          "genexpertResult": {
+            "type": "string",
+            "enum": [
+              "NOT_DETECTED",
+              "DETECTED"
+            ],
+            "description": "The reviewer's reading of the GeneXpert result."
+          },
+          "titerResult": {
+            "type": "string",
+            "enum": [
+              "REACTIVE",
+              "NON_REACTIVE"
+            ],
+            "description": "The reviewer's reading of the Hep B titer. Required to approve a Hep B titer."
           }
         },
         "required": [

@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import { FileCheck, FileText, X, Clock, Eye, Check, User, Building2, Folder, FlaskConical, CalendarDays, ShieldCheck, ChevronDown, ExternalLink } from 'lucide-react'
 import { fadeRise } from '@/lib/motion'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
+import { hasPrefill, initialResults, resultPayload, reviewResultError, type ReviewResults } from '@/lib/review-results'
 
 export interface ReviewQueueEntry {
   id: string
@@ -36,7 +37,7 @@ function documentLabel(item: ReviewQueueEntry) {
   if (cxr && gx) return 'Chest X-Ray & GeneXpert Result'
   if (cxr) return 'Chest X-Ray Result'
   if (gx) return 'GeneXpert Result'
-  return 'Laboratory Report'
+  return 'Annual Physical Exam'
 }
 
 /** What kind of document this is, as chips: the results it reports (a document can report both), or Hep B. */
@@ -201,7 +202,23 @@ function DetailRow({ label, value, danger }: { label: string; value: string; dan
   )
 }
 
-const pretty = (v: string) => v.replace(/_/g, ' ').toLowerCase().replace(/^\w/, c => c.toUpperCase())
+/** One result the reviewer reads from the file and records. The empty choice is a real answer for the optional ones. */
+function ResultSelect({ id, label, value, onChange, emptyLabel, options }: { id: string; label: string; value: string; onChange: (v: string) => void; emptyLabel: string; options: { value: string; label: string }[] }) {
+  return (
+    <div style={{ marginTop: 10 }}>
+      <label htmlFor={id} style={{ ...fieldLabel, marginBottom: 6 }}>{label}</label>
+      <div style={{ position: 'relative' }}>
+        <select id={id} value={value} onChange={e => onChange(e.target.value)} className={focusRing}
+          style={{ ...inputBase, height: 44, padding: '0 44px 0 14px', appearance: 'none', cursor: 'pointer', color: value ? '#1f2937' : '#5f6b7d' }}
+        >
+          <option value="">{emptyLabel}</option>
+          {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+        <ChevronDown size={18} color="#333" aria-hidden="true" style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+      </div>
+    </div>
+  )
+}
 
 /** The verification window: the uploaded file on the left; the staff member's own submitted details and the
  * reviewer's controls on the right. Approving records the reviewer's findings and signs with their signature;
@@ -211,6 +228,11 @@ export function VerificationModal({ item, initialAction, signatureId, onClose, o
   const [fileState, setFileState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [action, setAction] = useState<ReviewAction>(initialAction)
   const [notes, setNotes] = useState('')
+  // Starts from whatever the row already holds: empty for a new upload, the staff member's own entry (to confirm or
+  // correct) for an older one.
+  const [results, setResults] = useState<ReviewResults>(() => initialResults(item))
+  const [prefilled] = useState(() => hasPrefill(initialResults(item)))
+  const setResult = (key: keyof ReviewResults) => (value: string) => { setResults(r => ({ ...r, [key]: value }) as ReviewResults); setError('') }
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -236,9 +258,13 @@ export function VerificationModal({ item, initialAction, signatureId, onClose, o
     setError('')
     if (reject && !notes.trim()) { setError('Tell the staff member why a re-upload is needed.'); return }
     if (!reject && !signatureId) { setError('Set up your digital signature in Profile before approving.'); return }
+    if (!reject) {
+      const resultError = reviewResultError(item.docType, results)
+      if (resultError) { setError(resultError); return }
+    }
     setSaving(true)
     try {
-      await api.patch(`/documents/${item.id}/review`, reject ? { action: 'reject', reason: notes.trim() } : { action: 'approve', signatureId, notes: notes.trim() || undefined })
+      await api.patch(`/documents/${item.id}/review`, reject ? { action: 'reject', reason: notes.trim() } : { action: 'approve', signatureId, notes: notes.trim() || undefined, ...resultPayload(item.docType, results) })
       onSaved(item.id)
     } catch (err) {
       setError(apiMessage(err, reject ? 'Could not request a re-upload. Please try again.' : 'Could not save the verification. Please try again.'))
@@ -271,7 +297,7 @@ export function VerificationModal({ item, initialAction, signatureId, onClose, o
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)] gap-6" style={{ marginTop: 20 }}>
           <div style={{ border: '1px solid #e2e6ec', borderRadius: 12, background: '#f8fafc', minHeight: 'clamp(300px, 46vh, 560px)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', position: 'relative' }}>
             {fileState === 'loading' && <div role="status" style={{ fontSize: 13, color: '#5f6b7d' }}>Loading the document…</div>}
-            {fileState === 'error' && <div role="alert" style={{ fontSize: 13, color: '#9b1c1c', textAlign: 'center', padding: 24 }}>The file couldn&apos;t be loaded. The results below were entered by the staff member; you can still record your decision.</div>}
+            {fileState === 'error' && <div role="alert" style={{ fontSize: 13, color: '#9b1c1c', textAlign: 'center', padding: 24 }}>The file couldn&apos;t be loaded, so there is nothing to read the result from. Close this window and open it again, or request a re-upload.</div>}
             {fileState === 'ready' && file && (isPdf
               // eslint-disable-next-line @next/next/no-img-element
               ? <iframe src={file.url} title={`${label} — uploaded file`} style={{ border: 'none', width: '100%', height: 'clamp(300px, 46vh, 560px)' }} />
@@ -290,13 +316,30 @@ export function VerificationModal({ item, initialAction, signatureId, onClose, o
 
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: 2 }}>Submitted by the staff member</div>
-              {item.cxrResult !== 'NOT_APPLICABLE' && <DetailRow label="Chest X-Ray" value={pretty(item.cxrResult)} danger={item.cxrResult === 'INFILTRATE'} />}
-              {item.genexpertResult !== 'NOT_APPLICABLE' && <DetailRow label="GeneXpert" value={pretty(item.genexpertResult)} danger={item.genexpertResult === 'DETECTED'} />}
-              {item.titerResult !== 'NOT_APPLICABLE' && <DetailRow label="Hep B Titer" value={pretty(item.titerResult)} danger={item.titerResult === 'NON_REACTIVE'} />}
               <DetailRow label="Exam date" value={item.examDate ?? '—'} />
               {item.facilityName && <DetailRow label="Facility" value={item.facilityName} />}
               {item.notes && <div style={{ background: '#f1f5f9', borderRadius: 8, padding: '8px 12px', marginTop: 6, fontSize: 13, fontStyle: 'italic', color: '#374151' }}>&ldquo;{item.notes}&rdquo;</div>}
             </div>
+
+            {!reject && (
+              <fieldset style={{ border: 'none', padding: 0, margin: '0 0 16px', minWidth: 0 }}>
+                <legend style={{ ...fieldLabel, marginBottom: 2, padding: 0 }}>Your reading of the result *</legend>
+                <p style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.5, margin: 0 }}>
+                  {prefilled ? 'Pre-filled from what the staff member entered. Check it against the file and correct it if it differs.' : 'Read the result from the file and record it. The clinical alert is based on this.'}
+                </p>
+                {item.docType === 'HEPB_TITER' ? (
+                  <ResultSelect id="verify-titer" label="Hep B titer" value={results.titer} onChange={setResult('titer')} emptyLabel="Select result"
+                    options={[{ value: 'REACTIVE', label: 'Reactive' }, { value: 'NON_REACTIVE', label: 'Non-reactive' }]} />
+                ) : (
+                  <>
+                    <ResultSelect id="verify-cxr" label="Chest X-ray" value={results.cxr} onChange={setResult('cxr')} emptyLabel="Not recorded"
+                      options={[{ value: 'CLEARED', label: 'Cleared' }, { value: 'INFILTRATE', label: 'Infiltrate' }]} />
+                    <ResultSelect id="verify-genexpert" label="GeneXpert (only if one was done)" value={results.genexpert} onChange={setResult('genexpert')} emptyLabel="Not recorded"
+                      options={[{ value: 'NOT_DETECTED', label: 'Not detected' }, { value: 'DETECTED', label: 'Detected' }]} />
+                  </>
+                )}
+              </fieldset>
+            )}
 
             <label htmlFor="verify-notes" style={fieldLabel}>{reject ? 'Reason for re-upload (shown to the staff member) *' : 'Radiology / Lab Finding Notes'}</label>
             <textarea id="verify-notes" value={notes} onChange={e => setNotes(e.target.value)} rows={4} className={focusRing}

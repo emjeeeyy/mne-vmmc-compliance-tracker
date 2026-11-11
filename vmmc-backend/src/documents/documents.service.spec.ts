@@ -132,13 +132,30 @@ describe('DocumentsService.upload — upload gateway validation', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('rejects an upload missing both cxrResult and genexpertResult', async () => {
-    const { service, calls } = buildService([]);
+  it('accepts an APE upload with no result at all: the reviewer records it at approval, so no result is stored yet', async () => {
+    const pendingRow = { ...EXISTING_ROW, id: 'doc-no-result', cxr_result: 'NOT_APPLICABLE' };
+    const { service, client } = buildService([{ data: pendingRow, error: null }]);
     const file = { buffer: PDF_BUFFER, size: PDF_BUFFER.length } as Express.Multer.File;
-    await expect(service.upload(EMPLOYEE, file, { category: 'APE', examDate: '2026-06-15' })).rejects.toThrow(
-      BadRequestException,
-    );
-    expect(calls).toEqual([]);
+
+    const result = await service.upload(EMPLOYEE, file, { category: 'APE', examDate: '2026-06-15' });
+
+    expect(result.id).toBe('doc-no-result');
+    const insertArg = client.from.mock.results[0].value.insert.mock.calls[0][0];
+    expect(insertArg.cxr_result).toBe('NOT_APPLICABLE');
+    expect(insertArg.genexpert_result).toBe('NOT_APPLICABLE');
+    expect(insertArg.titer_result).toBe('NOT_APPLICABLE');
+    expect(insertArg.review_status).toBe('PENDING');
+  });
+
+  it('keeps a result an older client still sends, as a pre-fill for the reviewer, but only for the right category', async () => {
+    const { service, client } = buildService([{ data: EXISTING_ROW, error: null }]);
+    const file = { buffer: PDF_BUFFER, size: PDF_BUFFER.length } as Express.Multer.File;
+
+    await service.upload(EMPLOYEE, file, { category: 'APE', examDate: '2026-06-15', cxrResult: 'INFILTRATE', titerResult: 'REACTIVE' });
+
+    const insertArg = client.from.mock.results[0].value.insert.mock.calls[0][0];
+    expect(insertArg.cxr_result).toBe('INFILTRATE');
+    expect(insertArg.titer_result).toBe('NOT_APPLICABLE'); // a titer does not belong on an APE upload
   });
 });
 
@@ -182,14 +199,16 @@ describe('DocumentsService.upload — category branching (Hep B Titers)', () => 
     expect(insertArg.titer_result).toBe('REACTIVE');
   });
 
-  it('rejects a HEPB_TITER upload missing titerResult, before touching the database', async () => {
-    const { service, calls, complianceRecordService } = buildService([]);
+  it('accepts a HEPB_TITER upload with no titer result (the reviewer records it), still without touching the APE cycle', async () => {
+    const titerRow = { ...EXISTING_ROW, id: 'doc-titer-2', doc_type: 'HEPB_TITER', cxr_result: 'NOT_APPLICABLE' };
+    const { service, client, complianceRecordService } = buildService([{ data: titerRow, error: null }]);
     const file = { buffer: PDF_BUFFER, size: PDF_BUFFER.length } as Express.Multer.File;
 
-    await expect(service.upload(EMPLOYEE, file, { category: 'HEPB_TITER', examDate: '2026-06-15' })).rejects.toThrow(
-      BadRequestException,
-    );
-    expect(calls).toEqual([]);
+    await service.upload(EMPLOYEE, file, { category: 'HEPB_TITER', examDate: '2026-06-15' });
+
+    const insertArg = client.from.mock.results[0].value.insert.mock.calls[0][0];
+    expect(insertArg.titer_result).toBe('NOT_APPLICABLE');
+    expect(insertArg.compliance_record_id).toBeNull();
     expect(complianceRecordService.getCurrentCycleRecordId).not.toHaveBeenCalled();
   });
 
@@ -329,17 +348,24 @@ describe('DocumentsService.listMine — review fields for the "My Clearance & Lo
   });
 });
 
+/** A pending document row as review() reads it: category plus whatever result values it carries (the pre-fill). */
+const pendingDoc = (over: Record<string, unknown> = {}) => ({
+  id: 'doc-1', employee_id: EMPLOYEE.id, compliance_record_id: null, review_status: 'PENDING',
+  doc_type: 'APE', cxr_result: 'NOT_APPLICABLE', genexpert_result: 'NOT_APPLICABLE', titer_result: 'NOT_APPLICABLE',
+  ...over,
+});
+
 describe('DocumentsService.review — compliance_records is only ever touched for APE documents', () => {
   const ADMIN: EmployeeContext = { ...EMPLOYEE, id: 'admin-1', role: 'ADMIN' };
 
   it('approving a document with a null compliance_record_id (e.g. a Hep B Titer) never calls the event classifier or touches compliance_records', async () => {
     const { service, calls, eventClassifierService } = buildService([
-      { data: { id: 'doc-1', employee_id: EMPLOYEE.id, compliance_record_id: null, review_status: 'PENDING' }, error: null }, // find document
+      { data: pendingDoc({ doc_type: 'HEPB_TITER' }), error: null }, // find document
       { data: { department_id: EMPLOYEE.departmentId }, error: null }, // find employee's department
       { data: null, error: null }, // update review_status -> APPROVED
     ]);
 
-    const result = await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1' });
+    const result = await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', titerResult: 'REACTIVE' });
 
     expect(result.message).toBe('Document approved.');
     expect(calls).toEqual(['documents', 'employees', 'documents']);
@@ -350,7 +376,7 @@ describe('DocumentsService.review — compliance_records is only ever touched fo
 describe('DocumentsService.review — the reviewer\'s findings are recorded with an approval', () => {
   const ADMIN: EmployeeContext = { ...EMPLOYEE, id: 'admin-1', role: 'ADMIN' };
   const pendingChain = () => [
-    { data: { id: 'doc-1', employee_id: EMPLOYEE.id, compliance_record_id: null, review_status: 'PENDING' }, error: null },
+    { data: pendingDoc(), error: null },
     { data: { department_id: EMPLOYEE.departmentId }, error: null },
     { data: null, error: null },
   ];
@@ -362,14 +388,96 @@ describe('DocumentsService.review — the reviewer\'s findings are recorded with
 
   it('saves trimmed findings as review_notes', async () => {
     const { service, client } = buildService(pendingChain());
-    await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', notes: '  No active infiltrates.  ' });
+    await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', cxrResult: 'CLEARED', notes: '  No active infiltrates.  ' });
     expect(updatePayload(client).review_notes).toBe('No active infiltrates.');
   });
 
   it('stores null (not an empty string) when no findings were entered', async () => {
     const { service, client } = buildService(pendingChain());
-    await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', notes: '   ' });
+    await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', cxrResult: 'CLEARED', notes: '   ' });
     expect(updatePayload(client).review_notes).toBeNull();
+  });
+});
+
+describe('DocumentsService.review — the reviewer records the result, not the staff member', () => {
+  const ADMIN: EmployeeContext = { ...EMPLOYEE, id: 'admin-1', role: 'ADMIN' };
+  const chainFor = (doc: Record<string, unknown>) => [
+    { data: doc, error: null }, // find document
+    { data: { department_id: EMPLOYEE.departmentId }, error: null }, // find employee's department
+    { data: null, error: null }, // update documents
+  ];
+  const updatePayload = (client: { from: jest.Mock }) =>
+    ((client.from as jest.Mock).mock.results[2].value as { update: jest.Mock }).update.mock.calls[0][0] as Record<string, unknown>;
+
+  it('writes the reviewer\'s results in the same update that approves the document', async () => {
+    const { service, client } = buildService(chainFor(pendingDoc()));
+    await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', cxrResult: 'INFILTRATE', genexpertResult: 'DETECTED' });
+    expect(updatePayload(client)).toMatchObject({
+      review_status: 'APPROVED', cxr_result: 'INFILTRATE', genexpert_result: 'DETECTED', titer_result: 'NOT_APPLICABLE',
+    });
+  });
+
+  it('refuses to approve an annual physical exam with no result recorded, and changes nothing', async () => {
+    const { service, calls, signaturesService, eventClassifierService } = buildService(chainFor(pendingDoc()));
+    await expect(service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1' })).rejects.toThrow(/at least one result/);
+    expect(calls).toEqual(['documents', 'employees']); // never reached the approving update
+    expect(signaturesService.assertOwnedByAdmin).not.toHaveBeenCalled();
+    expect(eventClassifierService.classify).not.toHaveBeenCalled();
+  });
+
+  it('refuses to approve a Hep B titer without the titer result, or with a chest X-ray result', async () => {
+    const titerDoc = pendingDoc({ doc_type: 'HEPB_TITER' });
+    const a = buildService(chainFor(titerDoc));
+    await expect(a.service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1' })).rejects.toThrow(/titer result/);
+    const b = buildService(chainFor(titerDoc));
+    await expect(b.service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', titerResult: 'REACTIVE', cxrResult: 'CLEARED' })).rejects.toThrow(/does not apply/);
+  });
+
+  it('a pre-filled entry the reviewer confirmed adds nothing to the notes', async () => {
+    const { service, client } = buildService(chainFor(pendingDoc({ cxr_result: 'CLEARED' })));
+    await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', cxrResult: 'CLEARED' });
+    expect(updatePayload(client).review_notes).toBeNull();
+  });
+
+  it('a pre-filled entry the reviewer corrected is noted next to their own findings, never silently overwritten', async () => {
+    const { service, client } = buildService(chainFor(pendingDoc({ cxr_result: 'INFILTRATE' })));
+    await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', cxrResult: 'CLEARED', notes: 'Lungs clear on the film.' });
+    const payload = updatePayload(client);
+    expect(payload.cxr_result).toBe('CLEARED');
+    expect(payload.review_notes).toBe('Lungs clear on the film.\nResult corrected at review (staff entered: Chest X-ray infiltrate -> cleared).');
+  });
+
+  it('the event classifier runs after the results are stored, so a clinical alert reads the reviewer\'s value', async () => {
+    const order: string[] = [];
+    const built = buildService([
+      { data: pendingDoc({ compliance_record_id: 'record-1' }), error: null }, // find document
+      { data: { department_id: EMPLOYEE.departmentId }, error: null }, // find employee
+      { data: null, error: null }, // update documents (results + APPROVED)
+      { data: null, error: null }, // update compliance_records.approved_document_id
+      { data: { id: 'record-1' }, error: null }, // re-select the record
+    ]);
+    const origFrom = built.client.from as jest.Mock;
+    const wrapped = jest.fn((table: string) => {
+      const chain = origFrom(table) as { update: jest.Mock };
+      const origUpdate = chain.update;
+      chain.update = jest.fn((payload: Record<string, unknown>) => { order.push(`update:${table}:${payload.cxr_result ?? '-'}`); return origUpdate(payload); });
+      return chain;
+    });
+    (built.client as unknown as { from: unknown }).from = wrapped;
+    (built.eventClassifierService.classify as jest.Mock).mockImplementation(async () => { order.push('classify'); });
+
+    await built.service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', cxrResult: 'INFILTRATE' });
+
+    expect(order[0]).toBe('update:documents:INFILTRATE');
+    expect(order[order.length - 1]).toBe('classify');
+  });
+
+  it('rejecting ignores any result values: a rejection records no reading', async () => {
+    const { service, client } = buildService(chainFor(pendingDoc()));
+    await service.review(ADMIN, 'doc-1', { action: 'reject', reason: 'Blurry scan.', cxrResult: 'INFILTRATE' });
+    const payload = updatePayload(client);
+    expect(payload).toMatchObject({ review_status: 'REJECTED', rejection_reason: 'Blurry scan.' });
+    expect(payload).not.toHaveProperty('cxr_result');
   });
 });
 

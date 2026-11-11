@@ -10,6 +10,7 @@ import { assertDocumentAccess } from '../common/assert-access';
 import { ReviewDocumentDto } from './dto/review-document.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { ALLOWED_MIME_TYPES, detectFileType } from './file-type';
+import { describeResultCorrections, resolveReviewResults } from './review-results';
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const BUCKET = 'documents';
@@ -84,11 +85,10 @@ export class DocumentsService {
   ) {
     if (!file) throw new BadRequestException('No file uploaded.');
     if (file.size > MAX_FILE_SIZE_BYTES) throw new BadRequestException('File exceeds the 5MB limit.');
-    if (dto.category === 'HEPB_TITER') {
-      if (!dto.titerResult) throw new BadRequestException('Provide the titer result (REACTIVE or NON_REACTIVE).');
-    } else if (!dto.cxrResult && !dto.genexpertResult) {
-      throw new BadRequestException('Provide at least one of cxrResult or genexpertResult.');
-    }
+    // No result is required (or expected) from the staff member any more: the reviewer reads the file and records the
+    // result when approving (see review()). The three optional result fields are still accepted so an older client
+    // that sends them keeps working; whatever arrives is stored only as a pre-fill for the reviewer to confirm or
+    // correct, and a result only counts once a reviewer has approved it.
 
     const detectedType = detectFileType(file.buffer);
     if (!detectedType) throw new BadRequestException('File must be a PDF, PNG, or JPEG.');
@@ -128,9 +128,10 @@ export class DocumentsService {
         file_type: ALLOWED_MIME_TYPES[detectedType],
         file_size_bytes: file.size,
         doc_type: dto.category,
-        cxr_result: dto.cxrResult ?? 'NOT_APPLICABLE',
-        genexpert_result: dto.genexpertResult ?? 'NOT_APPLICABLE',
-        titer_result: dto.titerResult ?? 'NOT_APPLICABLE',
+        // Only the results that belong to the category are kept as the pre-fill.
+        cxr_result: dto.category === 'APE' ? (dto.cxrResult ?? 'NOT_APPLICABLE') : 'NOT_APPLICABLE',
+        genexpert_result: dto.category === 'APE' ? (dto.genexpertResult ?? 'NOT_APPLICABLE') : 'NOT_APPLICABLE',
+        titer_result: dto.category === 'HEPB_TITER' ? (dto.titerResult ?? 'NOT_APPLICABLE') : 'NOT_APPLICABLE',
         title: dto.title ?? null,
         facility_name: dto.facilityName ?? null,
         notes: dto.notes ?? null,
@@ -270,7 +271,7 @@ export class DocumentsService {
 
     const { data: document, error: findError } = await client
       .from('documents')
-      .select('id, employee_id, compliance_record_id, review_status')
+      .select('id, employee_id, compliance_record_id, review_status, doc_type, cxr_result, genexpert_result, titer_result')
       .eq('id', documentId)
       .maybeSingle();
     if (findError) throw new BadRequestException(findError.message);
@@ -307,7 +308,22 @@ export class DocumentsService {
 
     // Approve
     if (!dto.signatureId) throw new BadRequestException('A signatureId is required to approve a document.');
+    // The reviewer's reading of the file is what gets recorded. It is written in the same update that approves the
+    // document, so the event classifier below (which reads the approved document's results to decide whether to
+    // raise a clinical alert) always sees the reviewer's values and never an unchecked self-report.
+    const results = resolveReviewResults(document.doc_type, dto);
     await this.signaturesService.assertOwnedByAdmin(dto.signatureId, currentUser.id);
+
+    // A pre-filled entry (older uploads) that the reviewer changed is noted rather than silently overwritten.
+    const correction = describeResultCorrections(
+      {
+        cxr_result: document.cxr_result ?? 'NOT_APPLICABLE',
+        genexpert_result: document.genexpert_result ?? 'NOT_APPLICABLE',
+        titer_result: document.titer_result ?? 'NOT_APPLICABLE',
+      },
+      results,
+    );
+    const reviewNotes = [dto.notes?.trim(), correction].filter(Boolean).join('\n') || null;
 
     const { error: updateError } = await client
       .from('documents')
@@ -316,7 +332,8 @@ export class DocumentsService {
         reviewed_by: currentUser.id,
         reviewed_at: new Date().toISOString(),
         signature_id: dto.signatureId,
-        review_notes: dto.notes?.trim() || null,
+        review_notes: reviewNotes,
+        ...results,
       })
       .eq('id', documentId);
     if (updateError) throw new BadRequestException(updateError.message);

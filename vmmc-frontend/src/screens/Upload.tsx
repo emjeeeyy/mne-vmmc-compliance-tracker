@@ -60,7 +60,7 @@ function resultLabel(docType: string, cxrResult: DocumentEntry['cxrResult'], gen
   if (hasCxr && hasGenexpert) return 'Chest X-Ray & GeneXpert Result'
   if (hasCxr) return 'Chest X-Ray Result'
   if (hasGenexpert) return 'GeneXpert Result'
-  return 'Laboratory Report'
+  return 'Annual Physical Exam'
 }
 
 function labelFor(doc: DocumentEntry) {
@@ -118,12 +118,6 @@ interface UploadFormFieldsProps {
   setExamDate: (v: string) => void
   department: { name: string; code: string } | null
   dropzone: ReactNode
-  cxrResult: '' | 'CLEARED' | 'INFILTRATE'
-  setCxrResult: (v: '' | 'CLEARED' | 'INFILTRATE') => void
-  genexpertResult: '' | 'NOT_DETECTED' | 'DETECTED'
-  setGenexpertResult: (v: '' | 'NOT_DETECTED' | 'DETECTED') => void
-  titerResult: '' | 'REACTIVE' | 'NON_REACTIVE'
-  setTiterResult: (v: 'REACTIVE' | 'NON_REACTIVE') => void
   notes: string
   setNotes: (v: string) => void
   formError: string
@@ -155,7 +149,7 @@ function UploadFormFields(p: UploadFormFieldsProps) {
         </div>
         <div>
           <label htmlFor={`${id}-facility`} style={formLabelStyle}>Clinic / Diagnostic Facility Name</label>
-          <input id={`${id}-facility`} value={p.facilityName} onChange={e => p.setFacilityName(e.target.value)} placeholder="e.g. Nurse Maria Santos" className={formInputClass} style={formInputStyle} />
+          <input id={`${id}-facility`} value={p.facilityName} onChange={e => p.setFacilityName(e.target.value)} placeholder="e.g. VMMC Radiology Department" className={formInputClass} style={formInputStyle} />
         </div>
         <div>
           <label htmlFor={`${id}-date`} style={formLabelStyle}>Date Exam Conducted *</label>
@@ -169,36 +163,11 @@ function UploadFormFields(p: UploadFormFieldsProps) {
 
       <div style={{ marginTop: 22 }}>{p.dropzone}</div>
 
-      {p.category === 'HEPB_TITER' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-7" style={{ marginTop: 22 }}>
-          <div>
-            <label htmlFor={`${id}-titer`} style={formLabelStyle}>Hep B Titer Result *</label>
-            <FormSelect id={`${id}-titer`} value={p.titerResult} onChange={v => p.setTiterResult(v as 'REACTIVE' | 'NON_REACTIVE')} placeholder="Select result">
-              <option value="REACTIVE">Reactive</option>
-              <option value="NON_REACTIVE">Non-Reactive</option>
-            </FormSelect>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-7 gap-y-[22px]" style={{ marginTop: 22 }}>
-          <div>
-            <label htmlFor={`${id}-cxr`} style={formLabelStyle}>Chest X-Ray Result</label>
-            <FormSelect id={`${id}-cxr`} value={p.cxrResult} onChange={v => p.setCxrResult(v as '' | 'CLEARED' | 'INFILTRATE')}>
-              <option value="">N/A</option>
-              <option value="CLEARED">Cleared</option>
-              <option value="INFILTRATE">Infiltrate</option>
-            </FormSelect>
-          </div>
-          <div>
-            <label htmlFor={`${id}-genexpert`} style={formLabelStyle}>GeneXpert Result</label>
-            <FormSelect id={`${id}-genexpert`} value={p.genexpertResult} onChange={v => p.setGenexpertResult(v as '' | 'NOT_DETECTED' | 'DETECTED')}>
-              <option value="">N/A</option>
-              <option value="NOT_DETECTED">Not Detected</option>
-              <option value="DETECTED">Detected</option>
-            </FormSelect>
-          </div>
-        </div>
-      )}
+      {/* No result fields: the TB DOTS reviewer reads the result from the file and records it when approving, so a
+          typo here can no longer raise a false clinical alert or hide a real one. */}
+      <p style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.5, margin: '14px 0 0' }}>
+        You don&apos;t need to enter any results. The TB DOTS reviewer reads them from the file you upload.
+      </p>
 
       <div style={{ marginTop: 22 }}>
         <label htmlFor={`${id}-notes`} style={formLabelStyle}>Additional Notes for TB DOTS Reviewer</label>
@@ -255,9 +224,6 @@ export default function Upload() {
   const [title, setTitle] = useState('')
   const [facilityName, setFacilityName] = useState('')
   const [examDate, setExamDate] = useState('')
-  const [cxrResult, setCxrResult] = useState<'' | 'CLEARED' | 'INFILTRATE'>('')
-  const [genexpertResult, setGenexpertResult] = useState<'' | 'NOT_DETECTED' | 'DETECTED'>('')
-  const [titerResult, setTiterResult] = useState<'' | 'REACTIVE' | 'NON_REACTIVE'>('')
   const [notes, setNotes] = useState('')
   const [department, setDepartment] = useState<{ name: string; code: string } | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -322,9 +288,6 @@ export default function Upload() {
     setTitle('')
     setFacilityName('')
     setExamDate('')
-    setCxrResult('')
-    setGenexpertResult('')
-    setTiterResult('')
     setNotes('')
   }
 
@@ -332,11 +295,6 @@ export default function Upload() {
     if (!pendingFile) { setFormError('Please attach a file.'); return }
     if (!category) { setFormError('Please select a screening category.'); return }
     if (!examDate) { setFormError('Please enter the exam date.'); return }
-    if (category === 'HEPB_TITER') {
-      if (!titerResult) { setFormError('Provide the titer result (Reactive or Non-Reactive).'); return }
-    } else if (!cxrResult && !genexpertResult) {
-      setFormError('Provide at least one result (Chest X-Ray or GeneXpert).'); return
-    }
 
     setFormError('')
     setSubmitting(true)
@@ -349,12 +307,6 @@ export default function Upload() {
       if (title.trim()) formData.append('title', title.trim())
       if (facilityName.trim()) formData.append('facilityName', facilityName.trim())
       if (notes.trim()) formData.append('notes', notes.trim())
-      if (category === 'HEPB_TITER') {
-        formData.append('titerResult', titerResult)
-      } else {
-        if (cxrResult) formData.append('cxrResult', cxrResult)
-        if (genexpertResult) formData.append('genexpertResult', genexpertResult)
-      }
 
       const doc = await api.post<DocumentEntry>('/documents', formData, {
         idempotencyKey: uploadKey,
@@ -464,9 +416,6 @@ export default function Upload() {
                 <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) { selectFile(f); setShowUploadSheet(false) } }} />
               </div>
             }
-            cxrResult={cxrResult} setCxrResult={setCxrResult}
-            genexpertResult={genexpertResult} setGenexpertResult={setGenexpertResult}
-            titerResult={titerResult} setTiterResult={setTiterResult}
             notes={notes} setNotes={setNotes}
             formError={formError}
             submitting={submitting}
@@ -618,9 +567,6 @@ export default function Upload() {
                   <input ref={inputRef} type="file" accept=".pdf,.png,.jpeg,.jpg" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) selectFile(f) }} />
                 </>
               }
-              cxrResult={cxrResult} setCxrResult={setCxrResult}
-              genexpertResult={genexpertResult} setGenexpertResult={setGenexpertResult}
-              titerResult={titerResult} setTiterResult={setTiterResult}
               notes={notes} setNotes={setNotes}
               formError={formError}
               submitting={submitting}

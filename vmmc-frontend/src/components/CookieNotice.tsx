@@ -22,6 +22,12 @@ const CSS = `
   .vmmc-cookie-notice { left: 16px; right: auto; bottom: 16px; width: 360px; margin: 0; }
   .vmmc-cookie-notice[data-area="app"] { bottom: 16px; }
 }
+/* Inside the app on a phone the page scrolls inside <main>, whose bottom padding only clears the tab bar. The notice
+   floats above the tab bar, so without this the last control on a long page (the Save button on the upload form) can
+   never be scrolled out from under it. The notice's own height is published as --vmmc-notice-h (see the effect). */
+@media (max-width: 639px) {
+  body[data-cookie-notice-app] main { padding-bottom: calc(108px + var(--vmmc-notice-h, 0px)); }
+}
 `
 
 export default function CookieNotice() {
@@ -52,6 +58,26 @@ export default function CookieNotice() {
       window.removeEventListener('resize', apply)
       observer.disconnect()
       document.body.style.paddingBottom = ''
+    }
+  }, [visible, isPublic])
+
+  // Inside the app (phone widths, see the CSS): publish the notice's height so <main> can leave room for it.
+  useEffect(() => {
+    if (!visible || isPublic) return
+    const el = noticeRef.current
+    const apply = () => {
+      if (el) document.documentElement.style.setProperty('--vmmc-notice-h', `${el.offsetHeight}px`)
+    }
+    apply()
+    document.body.dataset.cookieNoticeApp = ''
+    window.addEventListener('resize', apply)
+    const observer = new ResizeObserver(apply)
+    if (el) observer.observe(el)
+    return () => {
+      window.removeEventListener('resize', apply)
+      observer.disconnect()
+      document.documentElement.style.removeProperty('--vmmc-notice-h')
+      delete document.body.dataset.cookieNoticeApp
     }
   }, [visible, isPublic])
 

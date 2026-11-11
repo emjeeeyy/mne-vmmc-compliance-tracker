@@ -30,9 +30,11 @@ export class DocumentsController {
         file: { type: 'string', format: 'binary' },
         category: { type: 'string', enum: ['APE', 'HEPB_TITER'] },
         examDate: { type: 'string', format: 'date' },
-        cxrResult: { type: 'string', enum: ['CLEARED', 'INFILTRATE'] },
-        genexpertResult: { type: 'string', enum: ['NOT_DETECTED', 'DETECTED'] },
-        titerResult: { type: 'string', enum: ['REACTIVE', 'NON_REACTIVE'] },
+        // Optional and no longer sent by the app: the reviewer records the result when approving. Kept so an older
+        // client still works; a value sent here is only a pre-fill for the reviewer to confirm or correct.
+        cxrResult: { type: 'string', enum: ['CLEARED', 'INFILTRATE'], description: 'Optional pre-fill; the reviewer records the result.' },
+        genexpertResult: { type: 'string', enum: ['NOT_DETECTED', 'DETECTED'], description: 'Optional pre-fill; the reviewer records the result.' },
+        titerResult: { type: 'string', enum: ['REACTIVE', 'NON_REACTIVE'], description: 'Optional pre-fill; the reviewer records the result.' },
         title: { type: 'string' },
         facilityName: { type: 'string' },
         notes: { type: 'string' },

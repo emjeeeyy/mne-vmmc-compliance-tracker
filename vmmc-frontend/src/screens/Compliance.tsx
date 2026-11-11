@@ -257,7 +257,7 @@ function documentTitle(doc: MyDocument) {
   if (hasCxr && hasGenexpert) return 'Chest X-Ray & GeneXpert Result'
   if (hasCxr) return 'Chest X-Ray Result'
   if (hasGenexpert) return 'GeneXpert Result'
-  return 'Laboratory Report'
+  return 'Annual Physical Exam'
 }
 
 /** Documents have UUIDs, not a sequential number — a short, stable reference derived from the id
