@@ -762,6 +762,8 @@ The forgot-password screen had a "Resend" link; the login 2FA step did not. The 
 
 On the laptop login, axe still flags the grey intro text above the form ("Input your secure credentials below…", `#718096` on white, 4.0:1) and, on the password step, three more small grey or green texts. That intro text also stays on screen during the code step. These were there before this change and were left alone; they are a quick colour clean-up if wanted. Also worth knowing: every new code (a resend, or logging in again) starts with a fresh budget of 5 wrong guesses, and the only request limit is the global 120 requests per minute. Someone who already has an account's password could therefore keep asking for new codes and keep guessing. It is a long shot (each code is 1 in a million, and they need the password first), but a per-account limit on how often a login code can be issued would close it. Not done; this change only makes the existing path visible.
 
+**The e2e suite is red, and has been since 2FA went on for everyone (found by running `/verify` before pushing).** `npm run test:e2e` gives 12 failed and 6 passed. Every failure is a login: the UI specs wait for `/dashboard` and the API test gets no `accessToken`, because a correct password now returns `mfaRequired` and the suite cannot read the emailed code. It is not a data problem: the suite logs in as `VMMC-25-0021` and `-0022`, which have real inboxes (checked in the database); all 26 accounts have 2FA on, and the 20 seed accounts with fictional `@vmmc.gov.ph` emails cannot complete a login at all. The 6 tests that pass are the ones that never reach the code step (health check, wrong password, wrong portal, no token). Two consequences: nothing behind login has automated browser coverage right now (this part's checks were mocked-API runs, not committed), and every run with Brevo configured emails real login codes to those two inboxes. No CI runs the suite, which is why it went unnoticed. Suggested fix, not built: use the dedicated test accounts and a helper that overwrites the newest `login_otps` hash with a known code through the service-role key, so 2FA stays on and the code step is still exercised.
+
 Not yet tested: a real login with the real emailed code.
 
 ---
@@ -811,6 +813,68 @@ Frontend typecheck clean; 93/93 frontend unit tests at the time of this part (66
 - **No format validation on purpose.** `validateEmployeeId` (used by signup) throws a 400 that spells out the ID format. At login a malformed ID just fails to match and gets the same generic message as a wrong one.
 
 Typecheck clean in both repos. **Live data checked (2026-11-08):** `select employee_id from employees where employee_id <> upper(employee_id)` returned no rows, so every stored ID is already upper-case and the case-folding cannot make any existing account unreachable. (Rows with an empty `employee_id`, roster entries that haven't signed up yet, are not matched by that query and cannot log in either way.) **Live login checked (2026-11-08), API level, real emailed code:** `POST /auth/login` with `vmmc-25-0024` (lower-case) returned `mfaRequired: true` with the canonical `VMMC-25-0024`, and `POST /auth/verify-login-otp` with the lower-case ID and the code from the real inbox returned 200 with a session for `VMMC-25-0024` (STAFF). So the backend half is verified end to end. **Still not checked:** the login screen's own behaviour in a browser (the field showing capitals as you type, and the caret staying put when editing mid-ID).
+
+---
+
+## Part Z — The admin records the result at review; staff no longer enter one
+
+### The problem
+
+The Submit Health Documents form made the staff member pick a Chest X-Ray result (Cleared / Infiltrate) and a GeneXpert result (Detected / Not Detected), or the Hep B titer. The admin's review could only approve or reject: it could not change a result. That mattered for two reasons.
+- **A typo meant reject and re-upload.** The staff member got a rejection email and SMS and had to start over, and the rejected row stayed in their history.
+- **The ticked value drives a clinical alert.** An approved Infiltrate or Detected result marks the record Critical and raises an escalation. A mis-ticked Infiltrate that the reviewer did not catch is a false alarm on someone's record; a Cleared on a report that says Infiltrate hides a real case.
+
+Where this came from. The build spec (`VMMC_TBDOTS_BuildSpec.md`, which is git-ignored, so only on the machine that has it) says in Phase 4 that `POST /documents` captures `cxr_result`, `genexpert_result` and `exam_date` with the upload, and in Phase 6 that review is only `{action, reason?, signatureId?}` (approving signs, and the engine "sets `clinical_status` from the result"). The original UI spec's staff screen (Screen 3, "Results & Upload") has only a dropzone and Recent Submissions, with no result inputs at all, so the selects were added when the upload was wired to the backend. No document uses the words "self-reported" or says the admin cannot edit a result; that was the combined effect of those two design choices, and nobody revisited it. HANDOFF had listed it as "arguably the admin's job".
+
+### What changed
+
+- **Staff form.** The three result fields are gone (both the mobile and desktop trees). A line under the file box says the TB DOTS reviewer reads the results from the file. The facility placeholder was "e.g. Nurse Maria Santos" (a person); it is now "e.g. VMMC Radiology Department".
+- **Admin verification window.** New "Your reading of the result" controls: Chest X-ray and GeneXpert for an annual physical exam, the titer for a Hep B titer. Approving requires them (an exam needs at least one; a titer needs the titer). Choosing "Request re-upload" hides them. The staff-submitted block now shows only the exam date, facility and notes.
+- **Backend.** `PATCH /documents/:id/review` accepts optional `cxrResult`, `genexpertResult` and `titerResult`, and on approval `resolveReviewResults()` (new, pure, `src/documents/review-results.ts`) requires the right ones for the document's category and refuses one from the wrong category (a titer on an exam, an X-ray on a titer) instead of ignoring it. The results are written **in the same update that approves the document**, before the event classifier runs, because the classifier reads the approved document's results from the database to decide whether to raise the clinical alert; if they were written afterwards it would read the old values.
+- **Old uploads keep working.** The upload endpoint still accepts the three result fields but no longer requires them, and stores them only as a pre-fill (and only the ones that belong to the category). That keeps an older browser tab working after a deploy, and it means uploads already waiting for review keep what the staff member entered, as a pre-fill the reviewer confirms or corrects. A result only counts once a reviewer has approved it. If the reviewer changes a pre-filled entry, a line "Result corrected at review (staff entered: Chest X-ray infiltrate -> cleared)." is appended to the review notes, so a correction is never a silent overwrite. No migration.
+- A document with no result yet is labelled "Annual Physical Exam" (it used to fall back to "Laboratory Report").
+
+### A second real bug, found while checking this
+
+The browser check could not click "Save Clearance Record" on a phone. It turned out to be a real bug from Part U's cookie notice fix: inside the app on a phone the notice floats above the tab bar, but the page scrolls inside `<main>`, whose bottom padding only clears the tab bar. The notice is about 170px tall, so the last control on a long page could never be scrolled out from under it until the notice was dismissed. Part U had checked public pages and the tab bar, not the bottom of a long in-app page. Fix: while the notice shows, `CookieNotice` publishes its height as `--vmmc-notice-h` and a phone-width rule gives `<main>` matching bottom padding; both are removed on dismissal. Measured before and after: with the notice showing the Save button sat at 622 to 662 under the notice at 581 to 752; it now scrolls to 455 to 495, clear of it.
+
+### Verified
+
+- Backend: 199 tests pass (new `review-results.spec.ts`, and `documents.service.spec.ts` updated and extended: approving writes the reviewer's results in the approving update; an exam with no result and a titer with no titer are refused and change nothing; a titer with an X-ray result is refused; a confirmed pre-fill adds nothing to the notes and a corrected one is noted; the classifier runs after the results are stored; rejecting records no result). `tsc` clean.
+- Frontend: 102 tests pass (new `lib/review-results.ts` helpers). `tsc` clean.
+- Running backend, write-free probe as the test admin with a non-existent document id: an invalid `cxrResult` gives 400; valid `cxrResult`, `genexpertResult` and `titerResult` are accepted as known fields (404 document not found); an unknown field is still refused.
+- Browser (mocked API, phone and laptop): 50 checks for the admin window (empty start, validation message, nothing sent when refused, pre-fill shown and corrected, GeneXpert added, titer-only for Hep B, re-upload sends no result, axe clean) and the staff form (no result field for either category, the explanation line, the facility placeholder, a submit that carries the category, date and file and no result field, axe clean). The earlier 50-check cookie-notice run still passes after the notice fix.
+
+### Not done / to know
+
+- **Deploy both repos together.** An admin tab that still has the old window cannot approve until it is refreshed (the backend now requires the reading). Staff tabs on the old form keep working.
+- Not run against a real database with a real approval: that sends real email and SMS and writes permanent event rows, so approval was covered by unit tests and the write-free probe instead.
+- The e2e suite still cannot log in (2FA); it has no upload or review specs, so nothing there needed changing.
+
+---
+
+## Part AA — The "your window is now open" notice was sent on the first scan, not on the real window date
+
+### The problem
+
+On a record's very first pass, `EventClassifierService.classify()` always emitted a `WINDOW_OPENED` event. The first pass is the first nightly scan after the year's records are created, so it happened for everyone at once, whatever their real window date (14 days before their birthday). The staff member's notification bell then said "Your annual clearance window is now open." Someone with a November birthday got it in January, about ten months early. It was in-app only (the event is Informational, so no email or SMS went out), which made it confusing rather than noisy. It also hit employees added mid-year, who could get "window open" in the same scan as an overdue message.
+
+Two things were mixed up. The internal event's message was "Tracking window opened for cycle 2026" (tracking started), but the text shown to staff was "Your annual clearance window is now open", so a bookkeeping marker was worded as a notice. The event is also not in the build spec's event table (its Informational tier is only `CLEARANCE_RECORDED`): it was added during implementation as a "first pass" marker.
+
+### Counts in the database (read-only check, 2026-11-11)
+
+26 `WINDOW_OPENED` events, one per employee; 10 of them were sent before the person's real window date, between 1 and 110 days early (median 19). Only in-app notifications were created for them.
+
+### What changed
+
+- **The `WINDOW_OPENED` emission was removed** from `classify()`. Nothing is emitted just because a record was scanned. The real "your window is open" message already existed: `FIRST_REMINDER`, sent on the real date (`window_open_date`, 14 days before the birthday) on all three channels. Emitting `WINDOW_OPENED` on the real date instead would have sent two messages saying the same thing on the same day.
+- Old `WINDOW_OPENED` rows stay in the append-only `events` table, so the subtype stays in the TypeScript union and the display labels (the notification history still reads properly). No migration.
+- Tests: the old test ("emits WINDOW_OPENED exactly once on the first pass") is replaced by two: nothing is sent before the window opens, even on the first scan (and nothing is written), and on the first scan after the window has opened only `FIRST_REMINDER` is sent. 200 backend tests pass; `tsc` clean.
+
+### Not done yet
+
+- The 10 premature events cannot be deleted (append-only by design). Their in-app notifications can be, so the bell stops showing a false notice; that deletes live data, so it waits for approval of the exact rows.
+- Backend only: nothing to deploy on the frontend. The next nightly scan (midnight Asia/Manila) is the first to run without it.
 
 ---
 
