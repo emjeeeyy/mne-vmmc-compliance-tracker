@@ -7,6 +7,7 @@ import { User, CalendarDays, PieChart, Clock, AlertTriangle, CheckCircle2, Bell,
 import HeroBand from '@/components/HeroBand'
 import { fadeRise } from '@/lib/motion'
 import { api, ApiError } from '@/lib/api'
+import { DEFAULT_TARGET_PERCENT, reminderCadenceLabel, targetStatus, type ReminderCadence } from '@/lib/compliance-target'
 
 export interface DepartmentClearance { name: string; code: string; upToDate: number; dueSoon: number; overdue: number }
 export interface FollowUpEntry {
@@ -20,7 +21,9 @@ export interface FollowUpEntry {
 }
 export interface AdminOverview {
   role: 'admin'
-  hospitalCompliance: { rate: number; trendDelta: number }
+  // targetPercent and reminderCadence come from the APE SLA row; optional so an older backend still renders.
+  hospitalCompliance: { rate: number; trendDelta: number; targetPercent?: number }
+  reminderCadence?: ReminderCadence
   totalPersonnel: number
   criticalCases: number
   annualClearanceProgress: { rate: number; monthlyBreakdown: { label: string; value: number }[] }
@@ -170,6 +173,17 @@ function DepartmentBars({ data }: { data: DepartmentClearance[] }) {
         <thead><tr><th scope="col">Department</th>{SERIES.map(s => <th key={s.key} scope="col">{s.barLabel}</th>)}</tr></thead>
         <tbody>{data.map(d => <tr key={d.code}><th scope="row">{d.name}</th>{SERIES.map(s => <td key={s.key}>{d[s.key]}</td>)}</tr>)}</tbody>
       </table>
+    </div>
+  )
+}
+
+/** The goal comes from the database (APE SLA row), next to the real rate, instead of a label typed on the page. */
+function TargetLine({ rate, target }: { rate: number; target: number }) {
+  const status = targetStatus(rate, target)
+  return (
+    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #eef1f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
+      <span style={{ color: '#5f6b7d' }}>Clearance target</span>
+      <strong style={{ color: status.met ? '#2e7d32' : '#9f1239', fontWeight: 600, textAlign: 'right' }}>{target}% · {status.text}</strong>
     </div>
   )
 }
@@ -409,7 +423,7 @@ export default function AdminLanding({ data: raw, onShowAnalytics, moreContent }
           </motion.div>
           <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible">
             <StatTile label="Upcoming Due (15 Days)" value={String(counts.dueSoon)} valueColor="#a16207" iconBg="#fdf0d5" icon={<Clock size={24} color="#c27803" />}>
-              <Bell size={13} color="#92400e" aria-hidden="true" /><strong style={{ color: '#92400e', fontWeight: 600 }}>Reminders dispatch weekly</strong>
+              <Bell size={13} color="#92400e" aria-hidden="true" /><strong style={{ color: '#92400e', fontWeight: 600 }}>{reminderCadenceLabel(data.reminderCadence)}</strong>
             </StatTile>
           </motion.div>
           <motion.div custom={3} variants={fadeRise} initial="hidden" animate="visible">
@@ -428,6 +442,7 @@ export default function AdminLanding({ data: raw, onShowAnalytics, moreContent }
           <motion.div custom={5} variants={fadeRise} initial="hidden" animate="visible" style={{ ...cardStyle, padding: '22px 24px 24px' }}>
             <CardHeader title="Screening Compliance Ratio" subtitle="Hospital-wide health compliance status" />
             <ComplianceDonut counts={counts} />
+            <TargetLine rate={rate} target={data.hospitalCompliance.targetPercent ?? DEFAULT_TARGET_PERCENT} />
           </motion.div>
         </div>
 

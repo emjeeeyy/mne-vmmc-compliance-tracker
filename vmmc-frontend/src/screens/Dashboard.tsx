@@ -10,6 +10,7 @@ import { api } from '@/lib/api'
 import { SkeletonBlock, SkeletonCard } from '@/components/Skeleton'
 import HeroBand from '@/components/HeroBand'
 import AdminLanding, { type AdminOverview } from './AdminLanding'
+import { DEFAULT_TARGET_PERCENT, targetStatus } from '@/lib/compliance-target'
 import { formatFullDate, toCsv } from '@/lib/format'
 
 interface Escalation {
@@ -465,7 +466,7 @@ export default function Dashboard() {
                   <div style={{ width: `${adminData?.hospitalCompliance.rate ?? 0}%`, height: '100%', background: 'linear-gradient(to right, #4ade80, #00b06b)', borderRadius: 999 }} />
                 </div>
               </div>
-              <div style={{ fontSize: 12, color: '#cbd5e0' }}>Goal: 95% Occupational Safety Standard</div>
+              <div style={{ fontSize: 12, color: '#cbd5e0' }}>Goal: {adminData?.hospitalCompliance.targetPercent ?? DEFAULT_TARGET_PERCENT}% Occupational Safety Standard · {targetStatus(adminData?.hospitalCompliance.rate ?? 0, adminData?.hospitalCompliance.targetPercent ?? DEFAULT_TARGET_PERCENT).text}</div>
             </motion.div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>

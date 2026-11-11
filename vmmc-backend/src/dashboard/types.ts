@@ -56,7 +56,10 @@ export interface FollowUpEntry {
 
 export interface AdminOverview {
   role: 'admin';
-  hospitalCompliance: { rate: number; trendDelta: number };
+  /** targetPercent is the clearance-rate goal stored on the APE SLA row (a whole percent, default 95). */
+  hospitalCompliance: { rate: number; trendDelta: number; targetPercent: number };
+  /** Whether weekly reminders are on and how many days apart (APE SLA row), so the page does not say "weekly" when it is not. */
+  reminderCadence: { enabled: boolean; intervalDays: number };
   totalPersonnel: number;
   criticalCases: number;
   annualClearanceProgress: { rate: number; monthlyBreakdown: MonthlyPoint[] };

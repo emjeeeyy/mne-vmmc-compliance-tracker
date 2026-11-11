@@ -1,11 +1,11 @@
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { SlaSettingsService } from '../compliance/sla-settings.service';
 import { NotificationDispatcherService } from '../notifications/notification-dispatcher.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { ImmunizationRow } from '../tracking/immunizations.service';
 import { PepLogRow } from '../tracking/pep-logs.service';
 import { ComplianceRecordRow, EventSubtype, EventType } from './types';
 
-const WEEKLY_REMINDER_INTERVAL_DAYS = 7;
 const MANUAL_REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 interface ApprovedDocument {
@@ -35,6 +35,7 @@ export class EventClassifierService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly notificationDispatcherService: NotificationDispatcherService,
+    private readonly slaSettingsService: SlaSettingsService,
   ) {}
 
   /** Admin-triggered "Send Reminder" from the dashboard's follow-up table. Goes through the same
@@ -162,11 +163,14 @@ export class EventClassifierService {
         await this.emit(record, 'WARNING', 'BIRTHDAY_DUE', 1, 'Birthday reached with no submission yet.');
         emitted.push('BIRTHDAY_DUE');
       } else {
+        // Whether weekly reminders go out at all, and how many days apart, come from the APE SLA row (they used to be a
+        // hard-coded 7). The birthday-day and overdue notices do not depend on this.
+        const sla = await this.slaSettingsService.getApe();
         const lastReminder = existingEvents?.find(
           (e) => e.event_subtype === 'BIRTHDAY_DUE' || e.event_subtype === 'WEEKLY_REMINDER',
         );
         const daysSince = lastReminder ? daysBetween(today, new Date(lastReminder.detected_at)) : Infinity;
-        if (daysSince >= WEEKLY_REMINDER_INTERVAL_DAYS) {
+        if (sla.weeklyReminderEnabled && daysSince >= sla.weeklyReminderIntervalDays) {
           await this.emit(record, 'WARNING', 'WEEKLY_REMINDER', 1, 'Weekly reminder — still no submission.');
           emitted.push('WEEKLY_REMINDER');
         }

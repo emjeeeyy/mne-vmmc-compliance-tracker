@@ -1,3 +1,4 @@
+import { ApeSlaSettings, DEFAULT_APE_SLA_SETTINGS, SlaSettingsService } from '../compliance/sla-settings.service';
 import { NotificationDispatcherService } from '../notifications/notification-dispatcher.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { createSupabaseClientMock } from '../test-utils/supabase-chain-mock';
@@ -29,11 +30,15 @@ const EVENT_ROW = {
   detected_at: new Date().toISOString(),
 };
 
-function buildClassifier(chainResults: { data: unknown; error: unknown }[]) {
+function slaSettings(over: Partial<ApeSlaSettings> = {}) {
+  return { getApe: jest.fn().mockResolvedValue({ ...DEFAULT_APE_SLA_SETTINGS, ...over }) } as unknown as SlaSettingsService;
+}
+
+function buildClassifier(chainResults: { data: unknown; error: unknown }[], sla: Partial<ApeSlaSettings> = {}) {
   const { client, calls } = createSupabaseClientMock(chainResults);
   const supabaseService = { getClient: jest.fn(() => client) } as unknown as SupabaseService;
   const notificationDispatcherService = { handleEvent: jest.fn().mockResolvedValue(undefined) } as unknown as NotificationDispatcherService;
-  const classifier = new EventClassifierService(supabaseService, notificationDispatcherService);
+  const classifier = new EventClassifierService(supabaseService, notificationDispatcherService, slaSettings(sla));
   return { classifier, calls, notificationDispatcherService };
 }
 
@@ -142,7 +147,7 @@ describe('EventClassifierService.classify', () => {
     ]);
     const supabaseService = { getClient: jest.fn(() => client) } as unknown as SupabaseService;
     const notificationDispatcherService = { handleEvent: jest.fn().mockResolvedValue(undefined) } as unknown as NotificationDispatcherService;
-    const classifier = new EventClassifierService(supabaseService, notificationDispatcherService);
+    const classifier = new EventClassifierService(supabaseService, notificationDispatcherService, slaSettings());
 
     // due_date is June 30; clearing on June 20 is 10 days early -> lead_time_days should be 10.
     await classifier.classify(makeRecord({ due_date: '2026-06-30' }), new Date('2026-06-20'));
@@ -191,6 +196,47 @@ describe('EventClassifierService.classify', () => {
     ]);
     const emitted = await dueForReminder.classifier.classify(makeRecord(), new Date('2026-06-23'));
     expect(emitted).toEqual(['WEEKLY_REMINDER']);
+  });
+
+  describe('the weekly reminder follows the stored APE SLA settings (it used to be a hard-coded 7 days)', () => {
+    const afterBirthday = [
+      { event_subtype: 'BIRTHDAY_DUE', detected_at: '2026-06-15T00:00:00Z' },
+    ];
+
+    it('a shorter stored gap sends the reminder sooner: 3 days fires on day 3, not on day 2', async () => {
+      const day2 = buildClassifier([{ data: afterBirthday, error: null }, { data: null, error: null }], { weeklyReminderIntervalDays: 3 });
+      expect(await day2.classifier.classify(makeRecord(), new Date('2026-06-17'))).toEqual([]);
+
+      const day3 = buildClassifier(
+        [{ data: afterBirthday, error: null }, { data: null, error: null }, { data: EVENT_ROW, error: null }],
+        { weeklyReminderIntervalDays: 3 },
+      );
+      expect(await day3.classifier.classify(makeRecord(), new Date('2026-06-18'))).toEqual(['WEEKLY_REMINDER']);
+    });
+
+    it('a longer stored gap holds the reminder back: 14 days does not fire on day 8', async () => {
+      const day8 = buildClassifier([{ data: afterBirthday, error: null }, { data: null, error: null }], { weeklyReminderIntervalDays: 14 });
+      expect(await day8.classifier.classify(makeRecord(), new Date('2026-06-23'))).toEqual([]);
+    });
+
+    it('with the weekly reminder switched off nothing is sent, however long it has been', async () => {
+      const off = buildClassifier([{ data: afterBirthday, error: null }, { data: null, error: null }], { weeklyReminderEnabled: false });
+      expect(await off.classifier.classify(makeRecord(), new Date('2026-06-28'))).toEqual([]);
+      expect(off.notificationDispatcherService.handleEvent).not.toHaveBeenCalled();
+    });
+
+    it('switching it off does not stop the birthday-day notice', async () => {
+      const { classifier } = buildClassifier(
+        [
+          { data: [], error: null },
+          { data: null, error: null },
+          { data: null, error: null }, // update -> NON_COMPLIANT
+          { data: EVENT_ROW, error: null }, // emit(BIRTHDAY_DUE)
+        ],
+        { weeklyReminderEnabled: false },
+      );
+      expect(await classifier.classify(makeRecord(), new Date('2026-06-15'))).toEqual(['BIRTHDAY_DUE']);
+    });
   });
 
   it('emits THREE_MONTH_HR_NOTICE once the employee is still non-compliant three months after birthday', async () => {

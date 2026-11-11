@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { EmployeeContext } from '../auth/types/role';
+import { SlaSettingsService } from '../compliance/sla-settings.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AdminOverview, ClearanceBucket, DepartmentClearance, FollowUpEntry, MonthlyPoint, ScreeningChecklistItem, ScreeningProgress, StaffOverview } from './types';
 
@@ -121,7 +122,10 @@ export function buildScreeningProgress(
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    private readonly supabaseService: SupabaseService,
+    private readonly slaSettingsService: SlaSettingsService,
+  ) {}
 
   async getOverview(currentUser: EmployeeContext): Promise<StaffOverview | AdminOverview> {
     return currentUser.role === 'ADMIN' ? this.getAdminOverview() : this.getStaffOverview(currentUser);
@@ -249,6 +253,7 @@ export class DashboardService {
       client.from('compliance_records').select('status, employee_id').eq('cycle_year', cycleYear - 1).returns<{ status: string; employee_id: string }[]>(),
     ]);
     if (error) throw error;
+    const sla = await this.slaSettingsService.getApe();
     const employees = employeeRows ?? [];
     const activeIds = new Set(employees.map((e) => e.id));
     // Same scope as before: only active employees' records count toward any figure on this page.
@@ -285,7 +290,9 @@ export class DashboardService {
 
     return {
       role: 'admin',
-      hospitalCompliance: { rate, trendDelta },
+      // The goal comes from the APE SLA row (target_rate), not from text on the screen.
+      hospitalCompliance: { rate, trendDelta, targetPercent: sla.targetPercent },
+      reminderCadence: { enabled: sla.weeklyReminderEnabled, intervalDays: sla.weeklyReminderIntervalDays },
       totalPersonnel,
       criticalCases,
       annualClearanceProgress: { rate, monthlyBreakdown },
