@@ -267,6 +267,15 @@ export class DocumentsService {
   }
 
   async review(currentUser: EmployeeContext, documentId: string, dto: ReviewDocumentDto) {
+    // Clearing someone is a signed sign-off by the TB DOTS unit (the ADMIN role): the reviewer reads the file, records
+    // the X-ray / GeneXpert / titer result and signs. A unit head only has department oversight, and could never
+    // approve anyway (the signature endpoints are ADMIN-only), so the old "unit head of the same department" path was
+    // a half-feature that only let them reject by API. The controller already restricts this route to ADMIN; this is
+    // the same rule one layer down, checked first so a refused caller learns nothing about whether a document exists.
+    if (currentUser.role !== 'ADMIN') {
+      throw new ForbiddenException('Only the TB DOTS administrator can review documents.');
+    }
+
     const client = this.supabaseService.getClient();
 
     const { data: document, error: findError } = await client
@@ -278,16 +287,6 @@ export class DocumentsService {
     if (!document) throw new NotFoundException('Document not found.');
     if (document.review_status !== 'PENDING') {
       throw new BadRequestException('This document has already been reviewed.');
-    }
-
-    const { data: employee } = await client
-      .from('employees')
-      .select('department_id')
-      .eq('id', document.employee_id)
-      .maybeSingle();
-
-    if (currentUser.role !== 'ADMIN' && !(currentUser.role === 'UNIT_HEAD' && currentUser.departmentId === employee?.department_id)) {
-      throw new ForbiddenException('You do not have permission to review this document.');
     }
 
     if (dto.action === 'reject') {

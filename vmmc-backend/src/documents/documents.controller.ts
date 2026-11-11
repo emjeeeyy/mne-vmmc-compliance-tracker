@@ -58,8 +58,9 @@ export class DocumentsController {
     return this.documentsService.getFileUrl(currentUser, id);
   }
 
+  /** Approving or rejecting is the TB DOTS administrator's job (they read the file, record the result and sign). */
   @Patch(':id/review')
-  @Roles('ADMIN', 'UNIT_HEAD')
+  @Roles('ADMIN')
   review(@CurrentUser() currentUser: EmployeeContext, @Param('id') id: string, @Body() dto: ReviewDocumentDto) {
     return this.documentsService.review(currentUser, id, dto);
   }

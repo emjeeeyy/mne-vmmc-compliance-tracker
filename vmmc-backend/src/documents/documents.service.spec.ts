@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ComplianceRecordService } from '../compliance/compliance-record.service';
 import { EmployeeContext } from '../auth/types/role';
 import { EventClassifierService } from '../monitoring/event-classifier.service';
@@ -361,14 +361,13 @@ describe('DocumentsService.review — compliance_records is only ever touched fo
   it('approving a document with a null compliance_record_id (e.g. a Hep B Titer) never calls the event classifier or touches compliance_records', async () => {
     const { service, calls, eventClassifierService } = buildService([
       { data: pendingDoc({ doc_type: 'HEPB_TITER' }), error: null }, // find document
-      { data: { department_id: EMPLOYEE.departmentId }, error: null }, // find employee's department
       { data: null, error: null }, // update review_status -> APPROVED
     ]);
 
     const result = await service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1', titerResult: 'REACTIVE' });
 
     expect(result.message).toBe('Document approved.');
-    expect(calls).toEqual(['documents', 'employees', 'documents']);
+    expect(calls).toEqual(['documents', 'documents']);
     expect(eventClassifierService.classify).not.toHaveBeenCalled();
   });
 });
@@ -377,12 +376,11 @@ describe('DocumentsService.review — the reviewer\'s findings are recorded with
   const ADMIN: EmployeeContext = { ...EMPLOYEE, id: 'admin-1', role: 'ADMIN' };
   const pendingChain = () => [
     { data: pendingDoc(), error: null },
-    { data: { department_id: EMPLOYEE.departmentId }, error: null },
     { data: null, error: null },
   ];
 
   function updatePayload(client: { from: jest.Mock }) {
-    const updateChain = (client.from as jest.Mock).mock.results[2].value as { update: jest.Mock };
+    const updateChain = (client.from as jest.Mock).mock.results[1].value as { update: jest.Mock };
     return updateChain.update.mock.calls[0][0] as Record<string, unknown>;
   }
 
@@ -399,15 +397,47 @@ describe('DocumentsService.review — the reviewer\'s findings are recorded with
   });
 });
 
+describe('DocumentsService.review — only the TB DOTS administrator may review', () => {
+  // Real gap this closes: the route used to allow a unit head of the same department. They could never approve (the
+  // signature endpoints are ADMIN-only) but could reject any pending document in their department through the API.
+  const approve = { action: 'approve' as const, signatureId: 'sig-1', cxrResult: 'CLEARED' as const };
+  const reject = { action: 'reject' as const, reason: 'Blurry scan.' };
+
+  it.each([
+    ['a unit head of the document owner\'s own department', { role: 'UNIT_HEAD' as const, departmentId: EMPLOYEE.departmentId }],
+    ['a unit head of another department', { role: 'UNIT_HEAD' as const, departmentId: 'dept-other' }],
+    ['a plain staff member', { role: 'STAFF' as const }],
+  ])('refuses %s, approving or rejecting, before touching the database', async (_label, who) => {
+    const caller: EmployeeContext = { ...EMPLOYEE, id: 'caller-1', ...who };
+    for (const dto of [approve, reject]) {
+      const { service, calls, signaturesService, eventClassifierService } = buildService([]);
+      await expect(service.review(caller, 'doc-1', dto)).rejects.toThrow(ForbiddenException);
+      expect(calls).toEqual([]); // not even the document lookup: a refused caller learns nothing about it
+      expect(signaturesService.assertOwnedByAdmin).not.toHaveBeenCalled();
+      expect(eventClassifierService.classify).not.toHaveBeenCalled();
+      expect(eventClassifierService.classifyDocumentRejected).not.toHaveBeenCalled();
+    }
+  });
+
+  it('still lets an admin reject (the one thing a unit head could do before)', async () => {
+    const admin: EmployeeContext = { ...EMPLOYEE, id: 'admin-1', role: 'ADMIN' };
+    const { service, eventClassifierService } = buildService([
+      { data: pendingDoc(), error: null }, // find document
+      { data: null, error: null }, // update -> REJECTED
+    ]);
+    await expect(service.review(admin, 'doc-1', reject)).resolves.toEqual({ message: 'Document rejected.' });
+    expect(eventClassifierService.classifyDocumentRejected).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('DocumentsService.review — the reviewer records the result, not the staff member', () => {
   const ADMIN: EmployeeContext = { ...EMPLOYEE, id: 'admin-1', role: 'ADMIN' };
   const chainFor = (doc: Record<string, unknown>) => [
     { data: doc, error: null }, // find document
-    { data: { department_id: EMPLOYEE.departmentId }, error: null }, // find employee's department
     { data: null, error: null }, // update documents
   ];
   const updatePayload = (client: { from: jest.Mock }) =>
-    ((client.from as jest.Mock).mock.results[2].value as { update: jest.Mock }).update.mock.calls[0][0] as Record<string, unknown>;
+    ((client.from as jest.Mock).mock.results[1].value as { update: jest.Mock }).update.mock.calls[0][0] as Record<string, unknown>;
 
   it('writes the reviewer\'s results in the same update that approves the document', async () => {
     const { service, client } = buildService(chainFor(pendingDoc()));
@@ -420,7 +450,7 @@ describe('DocumentsService.review — the reviewer records the result, not the s
   it('refuses to approve an annual physical exam with no result recorded, and changes nothing', async () => {
     const { service, calls, signaturesService, eventClassifierService } = buildService(chainFor(pendingDoc()));
     await expect(service.review(ADMIN, 'doc-1', { action: 'approve', signatureId: 'sig-1' })).rejects.toThrow(/at least one result/);
-    expect(calls).toEqual(['documents', 'employees']); // never reached the approving update
+    expect(calls).toEqual(['documents']); // never reached the approving update
     expect(signaturesService.assertOwnedByAdmin).not.toHaveBeenCalled();
     expect(eventClassifierService.classify).not.toHaveBeenCalled();
   });
@@ -451,7 +481,6 @@ describe('DocumentsService.review — the reviewer records the result, not the s
     const order: string[] = [];
     const built = buildService([
       { data: pendingDoc({ compliance_record_id: 'record-1' }), error: null }, // find document
-      { data: { department_id: EMPLOYEE.departmentId }, error: null }, // find employee
       { data: null, error: null }, // update documents (results + APPROVED)
       { data: null, error: null }, // update compliance_records.approved_document_id
       { data: { id: 'record-1' }, error: null }, // re-select the record
