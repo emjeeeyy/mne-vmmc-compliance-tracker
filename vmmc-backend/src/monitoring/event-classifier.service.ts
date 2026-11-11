@@ -87,10 +87,11 @@ export class EventClassifierService {
 
     const subtypesSeen = new Set((existingEvents ?? []).map((e) => e.event_subtype));
 
-    if (!existingEvents || existingEvents.length === 0) {
-      await this.emit(record, 'INFORMATIONAL', 'WINDOW_OPENED', 0, `Tracking window opened for cycle ${record.cycle_year}.`);
-      emitted.push('WINDOW_OPENED');
-    }
+    // Nothing is emitted just because a record was scanned. This used to emit a WINDOW_OPENED notice on a record's very
+    // first pass, which is the first scan of the year for everyone, so the bell said "your annual clearance window is
+    // now open" in January to someone whose window opens in October. The real "your window is open" message is
+    // FIRST_REMINDER below, sent on the real date (window_open_date) on every channel. Old WINDOW_OPENED rows stay in
+    // the append-only `events` table and are still labelled for display.
 
     // Clinical dimension — independent of the SLA timeline, can fire regardless of it.
     const { data: approvedDoc } = await client

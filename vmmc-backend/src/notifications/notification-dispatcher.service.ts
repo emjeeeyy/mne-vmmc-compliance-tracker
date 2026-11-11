@@ -52,7 +52,7 @@ export class NotificationDispatcherService {
     if (!employee) return;
 
     const body = SUBTYPE_LABELS[event.event_subtype] ?? event.message;
-    // INFORMATIONAL (WINDOW_OPENED, CLEARANCE_RECORDED) stays in-app only, deliberately —
+    // INFORMATIONAL (CLEARANCE_RECORDED; WINDOW_OPENED is legacy, no longer emitted) stays in-app only, deliberately —
     // these require no action, so emailing/texting every staff member for them would just
     // be noise. Only WARNING/EXCEPTION (anything that needs a response) goes out further.
     const channels: ('IN_APP' | 'SMS' | 'EMAIL')[] =

@@ -45,15 +45,30 @@ describe('EventClassifierService.classify', () => {
     expect(calls).toEqual([]);
   });
 
-  it('emits WINDOW_OPENED exactly once, on the very first pass for a record', async () => {
-    const { classifier, notificationDispatcherService } = buildClassifier([
-      { data: [], error: null }, // existingEvents (none yet)
-      { data: EVENT_ROW, error: null }, // emit(WINDOW_OPENED) insert
+  it('says nothing before the person\'s window opens, even on the very first scan of a record', async () => {
+    // Real bug this guards: the first pass used to emit WINDOW_OPENED ("your annual clearance window is now open")
+    // for every record, so everyone was told their window was open on the first scan of the year, whatever their
+    // real window date was. A November birthday got it in January.
+    const { classifier, calls, notificationDispatcherService } = buildClassifier([
+      { data: [], error: null }, // existingEvents (none yet: this is the first pass)
       { data: null, error: null }, // approvedDoc (none)
-      // today (May 20) is before window_open_date (Jun 1) -> no timeline event
+      // today (May 20) is before window_open_date (Jun 1) -> no timeline event either
     ]);
     const emitted = await classifier.classify(makeRecord(), new Date('2026-05-20'));
-    expect(emitted).toEqual(['WINDOW_OPENED']);
+    expect(emitted).toEqual([]);
+    expect(notificationDispatcherService.handleEvent).not.toHaveBeenCalled();
+    expect(calls).toEqual(['events', 'documents']); // only reads: nothing was inserted
+  });
+
+  it('on the first scan after the window has opened, sends just the first reminder (no separate "window open" notice)', async () => {
+    const { classifier, notificationDispatcherService } = buildClassifier([
+      { data: [], error: null }, // existingEvents (none yet)
+      { data: null, error: null }, // approvedDoc (none)
+      { data: null, error: null }, // compliance_records update -> NON_COMPLIANT
+      { data: EVENT_ROW, error: null }, // emit(FIRST_REMINDER)
+    ]);
+    const emitted = await classifier.classify(makeRecord(), new Date('2026-06-02')); // window opened Jun 1, birthday Jun 15
+    expect(emitted).toEqual(['FIRST_REMINDER']);
     expect(notificationDispatcherService.handleEvent).toHaveBeenCalledTimes(1);
   });
 

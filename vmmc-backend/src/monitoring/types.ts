@@ -1,6 +1,8 @@
 export type EventType = 'INFORMATIONAL' | 'WARNING' | 'EXCEPTION';
 
 export type EventSubtype =
+  // No longer emitted (it fired on a record's first scan, not on the real window date; FIRST_REMINDER is the real
+  // "window open" message). Kept in the union because old rows exist in the append-only `events` table.
   | 'WINDOW_OPENED'
   | 'CLEARANCE_RECORDED'
   | 'FIRST_REMINDER'
