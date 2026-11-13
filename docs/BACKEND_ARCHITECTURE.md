@@ -149,7 +149,7 @@ due_date passed, still no clearance      -> EXCEPTION / SLA_BREACH           -> 
 
 **Clinical dimension** (drives `clinical_status`, checked independently of the above):
 ```
-latest approved document is positive     -> EXCEPTION / CLINICAL_ALERT    -> clinical_status = CRITICAL
+every positive approved document (cleared or not) -> EXCEPTION / CLINICAL_ALERT, once per document  -> clinical_status = CRITICAL
 latest approved document is negative     -> INFORMATIONAL / CLEARANCE_RECORDED -> status = COMPLIANT, clinical_status = COMPLIANT (unless already CRITICAL)
 ```
 
@@ -158,6 +158,8 @@ latest approved document is negative     -> INFORMATIONAL / CLEARANCE_RECORDED -
 **Nothing is emitted just because a record was scanned (a bug removed).** `classify()` used to emit an Informational `WINDOW_OPENED` event on a record's first pass, which is the first nightly scan after the year's records exist, so everyone was told "your annual clearance window is now open" on the same night whatever their real window date was (a November birthday got it in January). It was a bookkeeping marker worded as a notice, and it is not in the build spec's event table. The real message is `FIRST_REMINDER`, sent on the real `window_open_date` on every channel, so the emission was removed rather than moved to the real date (which would have sent two messages on the same day). Old rows stay in the append-only `events` table, so the subtype remains in the union and the label maps. Pinned by two tests in `event-classifier.service.spec.ts` (nothing sent or written before the window opens, even on the first scan; only `FIRST_REMINDER` on the first scan after it opens). See `PROGRESS_REPORT_3.md` Part AA.
 
 **The reminder and target settings are read from the database (`SlaSettingsService`).** `sla_definitions` used to hold values nothing read: only `first_reminder_days_before_birthday` and `active` (APE row) were used, while `weekly_reminder`, `target_rate`, `recurrence` and the IMMUNIZATION row were ignored, the weekly gap was a constant of 7 in the classifier, and the admin dashboard's "95%" was typed text. `src/compliance/sla-settings.service.ts` now reads the APE row (cached for 60 seconds, so an edit takes effect without a redeploy and a scan does not query per record) through a pure `parseApeSlaSettings()` that clamps anything missing or out of range to the old behaviour, so a bad value cannot stop the scan. The classifier honours `weekly_reminder` and the new `weekly_reminder_interval_days` (migration `20261112000000_weekly_reminder_interval.sql`, default 7); the birthday-day and overdue notices do not depend on them. `GET /dashboard/overview` (admin) returns `hospitalCompliance.targetPercent` and `reminderCadence`. If the column is missing the service retries without it, so the backend can be deployed before the migration. **Not wired on purpose:** the IMMUNIZATION row and `recurrence` (immunization reminders follow each dose's own `next_due_date`; wiring them would be a new feature). See `PROGRESS_REPORT_3.md` Part AD.
+
+**A positive result approved after clearance is no longer ignored (a bug removed).** `classify()` used to return at once for a COMPLIANT record, and alerted once per record, so a repeat X-ray or follow-up GeneXpert approved later in the same cycle was never checked, and neither was a new positive after an earlier alert had been dealt with. Now the clinical dimension runs for everyone: `documentsNeedingClinicalAlert()` (`src/monitoring/clinical-alerts.ts`, pure) picks the positive approved documents that no existing alert was raised for; one alert is raised for them (an event payload `sourceId`/`sourceIds` records which documents), the record is marked Critical, and only then does a not-yet-cleared record go on to the clearance and deadline logic. Alerts sent before payloads existed have no ids and count as covering every document approved before them (compared as instants). The clearance branch must not downgrade a Critical set a moment earlier in the same call, so it also checks whether an alert was just raised. Pinned by `clinical-alerts.spec.ts` and the classifier tests. See `PROGRESS_REPORT_3.md` Part AE.
 
 **`lead_time_days`:** when a clearance is recorded, the classifier computes `due_date - today` in days and stores it on the record — positive means cleared early, negative means cleared late. This is the raw number Chapter 4's "average lead time" statistic would come from.
 
@@ -385,7 +387,7 @@ Take a concrete scenario and trace `EventClassifierService.classify()` (`src/mon
 
 ```ts
 async classify(record, today) {
-  if (record.status === 'COMPLIANT') return [];   // (1) not compliant, continue
+  // (1) a cleared record no longer returns here: it skips only the deadline logic, the clinical check still runs
 
   const { data: existingEvents } = await client.from('events')
     .select('event_subtype, detected_at').eq('compliance_record_id', record.id)...;
@@ -395,8 +397,8 @@ async classify(record, today) {
   // (3) Nothing is emitted just for being scanned. (An older version emitted WINDOW_OPENED here on a record's first
   //     pass, which told everyone their window was open on the first scan of the year; it was removed, see Part AA.)
 
-  const { data: approvedDoc } = await client.from('documents')...maybeSingle();
-  // (4) approvedDoc = null (nothing approved yet) -> the entire `if (approvedDoc)` block is skipped
+  const { data: approvedRows } = await client.from('documents')...;   // all approved documents, oldest first
+  // (4) approvedRows = [] (nothing approved yet) -> nothing is positive, so no clinical alert and no clearance
 
   const due = new Date(record.due_date);       // (5) 3 days ago
   const birthday = new Date(record.birthday_date);

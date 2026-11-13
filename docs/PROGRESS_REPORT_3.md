@@ -964,6 +964,36 @@ Backend: 217 tests pass (new `sla-settings.service.spec.ts`: parsing, the missin
 
 ---
 
+## Part AE — A positive result approved after someone is already cleared now raises the alert
+
+### The problem
+
+`EventClassifierService.classify()` started with "if this record is already COMPLIANT, return", and the approval step calls it after every approval. So a second approved document in the same cycle was saved and linked but its result was never checked. Cleared in February, then a repeat X-ray or a follow-up GeneXpert with a positive result approved in June: the record kept saying cleared and healthy, with no Critical flag and no alert to the person or the unit head. The alert was also once per record (`!subtypesSeen.has('CLINICAL_ALERT')`), so even for someone not yet cleared, a new positive result after an earlier alert had been dealt with stayed silent. Upload never looks at the record's status, so repeat documents are allowed and do happen: one person already has 3 approved annual-exam documents in the same year. For a TB program a missed positive result is the one thing the system must not miss.
+
+### The decision
+
+Every positive approved document gets exactly one alert, whether or not the person is already cleared, checked at approval and again in the nightly scan. "Already cleared" now means only "no more deadline logic". Alternatives rejected: blocking uploads once cleared (repeat tests are legitimate, and a new test is when the alert matters most); alerting only from the approval step (nothing would catch a missed one); one alert per record (the gap above).
+
+### What changed (monitoring logic only: no migration, no screens, no new permissions)
+
+- **`src/monitoring/clinical-alerts.ts`** (new, pure): `documentsNeedingClinicalAlert(docs, alerts)` returns the positive approved documents that no existing alert was raised for. An alert now records the documents it was raised for in its payload (`sourceId`, `sourceIds`). An older alert has no ids (all 4 sent so far), so it counts as covering every document approved before it was sent; compared as real instants, not text.
+- **`classify()`**: no longer returns early for a cleared record. It reads the record's events and all its approved documents (not only the latest), raises one alert for whatever is uncovered (marking the record Critical), and only then, for a person not yet cleared, applies the clearance and deadline logic as before. Several uncovered documents found together (a backlog) raise one alert that names them all, so they are not alerted again. If the alert cannot be recorded it is not reported as sent and the next scan tries again.
+- **A subtle trap handled:** the clearance branch reads the record's `clinical_status` as it was loaded, so when an uncovered positive document and a newer negative one are found together it would have overwritten the Critical just set. It now also checks whether an alert was just raised.
+- The person stays "cleared" for the deadline and becomes Critical for the clinical side: a combination the system already allowed (a first positive result, then a negative follow-up). The registry already treats Critical as not up to date. This change adds no way to clear Critical.
+
+### Verified
+
+- **Real data, read-only** (the actual compiled rule over every record): 26 records, 2 already cleared, 6 with approved documents, 4 positive approved documents, all 4 already covered by an alert; **0 records would raise a new alert**, so switching it on changes nothing today.
+- Backend: 232 tests pass (new `clinical-alerts.spec.ts`; classifier tests for a positive approved after clearance, no double alert for the same document, a new positive after an earlier alert, older alerts covering earlier documents but not later ones, a backlog giving one alert, the Critical-not-downgraded case, a failed alert retried, and a cleared person with only negative documents left alone). `tsc` clean.
+- Not run live: a real approval of a positive document (it sends real email and SMS and writes permanent event rows).
+
+### Notes
+
+- The nightly scan now reads each cleared person's events and approved documents (2 reads per cleared person, was none).
+- A later positive document now notifies the person (SMS and email, "requires immediate clinical review") and escalates to the unit head, like a first one. That is the intended change.
+
+---
+
 ## Current status
 
 Everything through Part D is live on `main` and deployed (Vercel + Railway, linked and confirmed working via a real cross-origin login). Parts E and F (real 2FA, defaulting on) are live on `main` as of `497dff6`. Part G (the production login-hang incident: bounded/non-blocking email sends, then the IPv4-forcing attempt, then the full Brevo provider swap) is pushed as `fc9b024`/`98cb866`/`ab4a29b` and **confirmed working live in production** — a real deployed login now completes end to end with 2FA, including actual email delivery. Parts H through J (Enter-key submit, Hep B Titers, and the staff landing page + Upload redesign) are all complete and fully verified live — through both `curl` and the real browser UI — but **not yet committed/pushed**, pending the user's go-ahead per the standing push-confirmation rule. Part K (the sidebar → single top-band header plus the staff dashboard rebuilt to match the mockup) is complete, checked side by side against the mockup at 1440px and screenshotted at 1024 to 1920px, and also unpushed. The Upload screen's own mockup pass is next. One deliberately-deferred open item on record: department compliance rate/pending-count are currently not shown anywhere on the desktop staff dashboard (Part J), left that way at the user's explicit request, to revisit later. No other outstanding failures or known-broken state as of this entry.
