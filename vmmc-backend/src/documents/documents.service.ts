@@ -10,12 +10,34 @@ import { assertDocumentAccess } from '../common/assert-access';
 import { ReviewDocumentDto } from './dto/review-document.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { ALLOWED_MIME_TYPES, detectFileType } from './file-type';
+import { describeResultCorrections, resolveReviewResults } from './review-results';
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const BUCKET = 'documents';
+const FILE_URL_TTL_SECONDS = 300;
 
 const DOCUMENT_COLUMNS =
-  'id, doc_type, cxr_result, genexpert_result, exam_date, review_status, file_type, file_size_bytes, uploaded_at';
+  'id, doc_type, cxr_result, genexpert_result, titer_result, title, facility_name, notes, exam_date, review_status, file_type, file_size_bytes, uploaded_at';
+
+interface MyDocumentRow {
+  id: string;
+  doc_type: string;
+  cxr_result: string;
+  genexpert_result: string;
+  titer_result: string;
+  title: string | null;
+  facility_name: string | null;
+  notes: string | null;
+  exam_date: string | null;
+  review_status: string;
+  file_type: string;
+  file_size_bytes: number;
+  uploaded_at: string;
+  reviewed_at: string | null;
+  rejection_reason: string | null;
+  review_notes: string | null;
+  reviewer: { full_name: string } | { full_name: string }[] | null;
+}
 
 interface ReviewQueueDepartment {
   name: string;
@@ -36,9 +58,14 @@ interface ReviewQueueRow {
   doc_type: string;
   cxr_result: string;
   genexpert_result: string;
+  titer_result: string;
+  title: string | null;
+  facility_name: string | null;
+  notes: string | null;
   exam_date: string | null;
   uploaded_at: string;
   employees: ReviewQueueEmployee | ReviewQueueEmployee[];
+  compliance_records: { due_date: string } | { due_date: string }[] | null;
 }
 
 @Injectable()
@@ -58,9 +85,10 @@ export class DocumentsService {
   ) {
     if (!file) throw new BadRequestException('No file uploaded.');
     if (file.size > MAX_FILE_SIZE_BYTES) throw new BadRequestException('File exceeds the 5MB limit.');
-    if (!dto.cxrResult && !dto.genexpertResult) {
-      throw new BadRequestException('Provide at least one of cxrResult or genexpertResult.');
-    }
+    // No result is required (or expected) from the staff member any more: the reviewer reads the file and records the
+    // result when approving (see review()). The three optional result fields are still accepted so an older client
+    // that sends them keeps working; whatever arrives is stored only as a pre-fill for the reviewer to confirm or
+    // correct, and a result only counts once a reviewer has approved it.
 
     const detectedType = detectFileType(file.buffer);
     if (!detectedType) throw new BadRequestException('File must be a PDF, PNG, or JPEG.');
@@ -76,7 +104,13 @@ export class DocumentsService {
       if (existing) return this.toResponse(existing);
     }
 
-    const complianceRecordId = await this.complianceRecordService.getCurrentCycleRecordId(employee.id);
+    // Only APE participates in the birthday-cycle SLA machinery — a Hep B Titer is one-time,
+    // no recurrence, no compliance_record linkage, no M&E engine involvement. Must stay
+    // conditional: review()'s compliance_records mutation below is gated purely on this being
+    // non-null, so an unconditional lookup here would silently attach every Hep B Titer upload
+    // to the employee's real APE cycle and let its approval clobber that cycle's clearance.
+    const complianceRecordId =
+      dto.category === 'APE' ? await this.complianceRecordService.getCurrentCycleRecordId(employee.id) : null;
 
     const storagePath = `${employee.id}/${randomUUID()}.${detectedType}`;
     const { error: uploadError } = await client.storage
@@ -93,9 +127,14 @@ export class DocumentsService {
         storage_path: storagePath,
         file_type: ALLOWED_MIME_TYPES[detectedType],
         file_size_bytes: file.size,
-        doc_type: 'APE',
-        cxr_result: dto.cxrResult ?? 'NOT_APPLICABLE',
-        genexpert_result: dto.genexpertResult ?? 'NOT_APPLICABLE',
+        doc_type: dto.category,
+        // Only the results that belong to the category are kept as the pre-fill.
+        cxr_result: dto.category === 'APE' ? (dto.cxrResult ?? 'NOT_APPLICABLE') : 'NOT_APPLICABLE',
+        genexpert_result: dto.category === 'APE' ? (dto.genexpertResult ?? 'NOT_APPLICABLE') : 'NOT_APPLICABLE',
+        titer_result: dto.category === 'HEPB_TITER' ? (dto.titerResult ?? 'NOT_APPLICABLE') : 'NOT_APPLICABLE',
+        title: dto.title ?? null,
+        facility_name: dto.facilityName ?? null,
+        notes: dto.notes ?? null,
         exam_date: dto.examDate,
         review_status: 'PENDING',
       })
@@ -118,15 +157,49 @@ export class DocumentsService {
     return this.toResponse(data);
   }
 
+  /** A short-lived signed link to view one uploaded file, for the Document Verification preview. */
+  async getFileUrl(currentUser: EmployeeContext, documentId: string) {
+    const client = this.supabaseService.getClient();
+    const { data: document } = await client
+      .from('documents')
+      .select('id, employee_id, storage_path, file_type')
+      .eq('id', documentId)
+      .maybeSingle<{ id: string; employee_id: string; storage_path: string; file_type: string }>();
+    if (!document) throw new NotFoundException('Document not found.');
+
+    const { data: owner } = await client.from('employees').select('department_id').eq('id', document.employee_id).maybeSingle();
+    const { data: currentDepartment } = await client.from('departments').select('code').eq('id', currentUser.departmentId).maybeSingle();
+    assertDocumentAccess(currentUser, owner?.department_id ?? '', document.employee_id, currentDepartment?.code);
+
+    const { data: signed, error } = await client.storage.from(BUCKET).createSignedUrl(document.storage_path, FILE_URL_TTL_SECONDS);
+    if (error || !signed?.signedUrl) throw new NotFoundException('The file for this document could not be found.');
+    return { url: signed.signedUrl, fileType: document.file_type, expiresInSeconds: FILE_URL_TTL_SECONDS };
+  }
+
+  /** The owner's own history, so it also carries who reviewed each document and why it was rejected —
+   * the "My Clearance & Logs" table's Verified By column and the reason a rejected upload needs redoing. */
   async listMine(employee: EmployeeContext) {
     const { data, error } = await this.supabaseService
       .getClient()
       .from('documents')
-      .select(DOCUMENT_COLUMNS)
+      .select(
+        `${DOCUMENT_COLUMNS}, reviewed_at, rejection_reason, review_notes,
+         reviewer:employees!documents_reviewed_by_fkey ( full_name )`,
+      )
       .eq('employee_id', employee.id)
-      .order('uploaded_at', { ascending: false });
+      .order('uploaded_at', { ascending: false })
+      .returns<MyDocumentRow[]>();
     if (error) throw new BadRequestException(error.message);
-    return (data ?? []).map((row) => this.toResponse(row));
+    return (data ?? []).map((row) => {
+      const reviewer = Array.isArray(row.reviewer) ? row.reviewer[0] : row.reviewer;
+      return {
+        ...this.toResponse(row),
+        reviewedBy: reviewer?.full_name ?? null,
+        reviewedAt: row.reviewed_at,
+        rejectionReason: row.rejection_reason,
+        reviewNotes: row.review_notes,
+      };
+    });
   }
 
   async getReviewQueue(currentUser: EmployeeContext) {
@@ -140,7 +213,8 @@ export class DocumentsService {
     const { data, error } = await client
       .from('documents')
       .select(
-        `id, doc_type, cxr_result, genexpert_result, exam_date, uploaded_at,
+        `id, doc_type, cxr_result, genexpert_result, titer_result, title, facility_name, notes, exam_date, uploaded_at,
+         compliance_records!documents_compliance_record_id_fkey ( due_date ),
          employees!documents_employee_id_fkey ( id, employee_id, full_name, job_title, department_id,
            departments!employees_department_id_fkey ( name, code ) )`,
       )
@@ -173,8 +247,14 @@ export class DocumentsService {
           docType: row.doc_type,
           cxrResult: row.cxr_result,
           genexpertResult: row.genexpert_result,
+          titerResult: row.titer_result,
+          title: row.title,
+          facilityName: row.facility_name,
+          notes: row.notes,
           examDate: row.exam_date,
           uploadedAt: row.uploaded_at,
+          // Only APE documents hang off a compliance cycle, so a Hep B Titer has no due date.
+          dueDate: (Array.isArray(row.compliance_records) ? row.compliance_records[0] : row.compliance_records)?.due_date ?? null,
           employee: {
             id: employee?.id,
             employeeId: employee?.employee_id,
@@ -187,27 +267,26 @@ export class DocumentsService {
   }
 
   async review(currentUser: EmployeeContext, documentId: string, dto: ReviewDocumentDto) {
+    // Clearing someone is a signed sign-off by the TB DOTS unit (the ADMIN role): the reviewer reads the file, records
+    // the X-ray / GeneXpert / titer result and signs. A unit head only has department oversight, and could never
+    // approve anyway (the signature endpoints are ADMIN-only), so the old "unit head of the same department" path was
+    // a half-feature that only let them reject by API. The controller already restricts this route to ADMIN; this is
+    // the same rule one layer down, checked first so a refused caller learns nothing about whether a document exists.
+    if (currentUser.role !== 'ADMIN') {
+      throw new ForbiddenException('Only the TB DOTS administrator can review documents.');
+    }
+
     const client = this.supabaseService.getClient();
 
     const { data: document, error: findError } = await client
       .from('documents')
-      .select('id, employee_id, compliance_record_id, review_status')
+      .select('id, employee_id, compliance_record_id, review_status, doc_type, cxr_result, genexpert_result, titer_result')
       .eq('id', documentId)
       .maybeSingle();
     if (findError) throw new BadRequestException(findError.message);
     if (!document) throw new NotFoundException('Document not found.');
     if (document.review_status !== 'PENDING') {
       throw new BadRequestException('This document has already been reviewed.');
-    }
-
-    const { data: employee } = await client
-      .from('employees')
-      .select('department_id')
-      .eq('id', document.employee_id)
-      .maybeSingle();
-
-    if (currentUser.role !== 'ADMIN' && !(currentUser.role === 'UNIT_HEAD' && currentUser.departmentId === employee?.department_id)) {
-      throw new ForbiddenException('You do not have permission to review this document.');
     }
 
     if (dto.action === 'reject') {
@@ -228,7 +307,22 @@ export class DocumentsService {
 
     // Approve
     if (!dto.signatureId) throw new BadRequestException('A signatureId is required to approve a document.');
+    // The reviewer's reading of the file is what gets recorded. It is written in the same update that approves the
+    // document, so the event classifier below (which reads the approved document's results to decide whether to
+    // raise a clinical alert) always sees the reviewer's values and never an unchecked self-report.
+    const results = resolveReviewResults(document.doc_type, dto);
     await this.signaturesService.assertOwnedByAdmin(dto.signatureId, currentUser.id);
+
+    // A pre-filled entry (older uploads) that the reviewer changed is noted rather than silently overwritten.
+    const correction = describeResultCorrections(
+      {
+        cxr_result: document.cxr_result ?? 'NOT_APPLICABLE',
+        genexpert_result: document.genexpert_result ?? 'NOT_APPLICABLE',
+        titer_result: document.titer_result ?? 'NOT_APPLICABLE',
+      },
+      results,
+    );
+    const reviewNotes = [dto.notes?.trim(), correction].filter(Boolean).join('\n') || null;
 
     const { error: updateError } = await client
       .from('documents')
@@ -237,6 +331,8 @@ export class DocumentsService {
         reviewed_by: currentUser.id,
         reviewed_at: new Date().toISOString(),
         signature_id: dto.signatureId,
+        review_notes: reviewNotes,
+        ...results,
       })
       .eq('id', documentId);
     if (updateError) throw new BadRequestException(updateError.message);
@@ -266,6 +362,10 @@ export class DocumentsService {
     doc_type: string;
     cxr_result: string;
     genexpert_result: string;
+    titer_result: string;
+    title: string | null;
+    facility_name: string | null;
+    notes: string | null;
     exam_date: string | null;
     review_status: string;
     file_type: string;
@@ -277,6 +377,10 @@ export class DocumentsService {
       docType: row.doc_type,
       cxrResult: row.cxr_result,
       genexpertResult: row.genexpert_result,
+      titerResult: row.titer_result,
+      title: row.title,
+      facilityName: row.facility_name,
+      notes: row.notes,
       examDate: row.exam_date,
       reviewStatus: row.review_status,
       fileType: row.file_type,

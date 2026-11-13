@@ -1,9 +1,29 @@
 import {
   assertDocumentAccess,
   buildEmployeeId,
+  getNextEmployeeId,
+  normalizeEmployeeId,
   parseEmploymentTypeFromEmployeeId,
   validateEmployeeId,
 } from './assert-access';
+
+describe('normalizeEmployeeId (login lookup)', () => {
+  it.each([
+    ['VMMC-25-0024', 'VMMC-25-0024'],
+    ['vmmc-25-0024', 'VMMC-25-0024'],
+    ['Vmmc-Cos-25-1001', 'VMMC-COS-25-1001'],
+    ['  vmmc-25-0024 \n', 'VMMC-25-0024'],
+  ])('%j becomes %j', (raw, expected) => expect(normalizeEmployeeId(raw)).toBe(expected));
+
+  it('does not validate the format: a malformed ID just fails to match instead of throwing a 400', () => {
+    expect(normalizeEmployeeId('not an id')).toBe('NOT AN ID');
+    expect(() => normalizeEmployeeId('')).not.toThrow();
+  });
+
+  it('survives a missing value', () => {
+    expect(normalizeEmployeeId(undefined as unknown as string)).toBe('');
+  });
+});
 
 describe('employee identity rules', () => {
   it('marks permanent staff employee IDs as PERMANENT', () => {
@@ -21,6 +41,14 @@ describe('employee identity rules', () => {
 
   it('rejects a mismatched employment type when validating IDs', () => {
     expect(() => validateEmployeeId('VMMC-25-0021', 'COS')).toThrow('VMMC-COS-YY-NNNN');
+  });
+
+  it('generates the next permanent employee ID after existing current-year IDs', () => {
+    expect(getNextEmployeeId('PERMANENT', ['VMMC-25-0001', 'VMMC-25-0021', 'VMMC-25-0100'], 2025)).toBe('VMMC-25-0101');
+  });
+
+  it('generates the next COS employee ID after existing current-year IDs', () => {
+    expect(getNextEmployeeId('COS', ['VMMC-COS-25-1001', 'VMMC-COS-25-1100'], 2025)).toBe('VMMC-COS-25-1101');
   });
 });
 

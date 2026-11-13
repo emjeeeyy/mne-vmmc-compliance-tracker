@@ -1,4 +1,4 @@
-export default function VmmcSeal({ size = 40, className }: { size?: number; className?: string }) {
+export default function VmmcSeal({ size = 40, className }: { size?: number | string; className?: string }) {
   return (
     <img
       src="/vmmc_logo.png"

@@ -1,4 +1,7 @@
-import { AuditLogRow, dedupeBursts, isNoise } from './activity.service';
+import { EmployeeContext } from '../auth/types/role';
+import { SupabaseService } from '../supabase/supabase.service';
+import { createSupabaseClientMock } from '../test-utils/supabase-chain-mock';
+import { ActivityService, AuditLogRow, dedupeBursts, isNoise } from './activity.service';
 
 function row(action: string, entityType: string, isoTime: string): AuditLogRow {
   return { action, entity_type: entityType, ip_address: '::1', user_agent: null, timestamp: isoTime };
@@ -41,6 +44,15 @@ describe('isNoise', () => {
     expect(isNoise(row('LOGIN', 'auth', '2026-10-02T00:00:00Z'))).toBe(false);
     expect(isNoise(row('LOGIN_FAILED', 'auth', '2026-10-02T00:00:00Z'))).toBe(false);
     expect(isNoise(row('ACCESS_DENIED', 'documents', '2026-10-02T00:00:00Z'))).toBe(false);
+  });
+});
+
+describe('dedupeBursts with a custom key', () => {
+  it('only merges rows that share the key, so different actors at the same moment both survive', () => {
+    const a = { ...row('ACCESS', 'documents', '2026-10-02T03:35:52.000Z'), who: 'a' };
+    const b = { ...row('ACCESS', 'documents', '2026-10-02T03:35:51.800Z'), who: 'b' };
+    const a2 = { ...row('ACCESS', 'documents', '2026-10-02T03:35:51.500Z'), who: 'a' };
+    expect(dedupeBursts([a, b, a2], (r) => `${r.who}:${r.action}:${r.entity_type}`).map((r) => r.who)).toEqual(['a', 'b']);
   });
 });
 
@@ -101,5 +113,49 @@ describe('dedupeBursts', () => {
 
   it('returns an empty array unchanged', () => {
     expect(dedupeBursts([])).toEqual([]);
+  });
+});
+
+describe('ActivityService.listActivityLogs — raw audit codes for the Profile audit-trail table', () => {
+  const EMPLOYEE = { id: 'employee-1', role: 'STAFF' } as EmployeeContext;
+
+  function serviceReturning(rows: AuditLogRow[]) {
+    const { client } = createSupabaseClientMock([{ data: rows, error: null }]);
+    const supabaseService = { getClient: jest.fn(() => client) } as unknown as SupabaseService;
+    return { service: new ActivityService(supabaseService), client };
+  }
+
+  it('returns the raw action, entity type, and a short entity reference alongside the readable title', async () => {
+    const { service } = serviceReturning([
+      { action: 'CREATE', entity_type: 'documents', entity_id: '904a7c1e-0000-4000-8000-000000000904', ip_address: '10.0.0.5', user_agent: null, timestamp: '2026-08-20T09:15:00Z' },
+    ]);
+
+    const [entry] = await service.listActivityLogs(EMPLOYEE);
+
+    expect(entry.action).toBe('CREATE');
+    expect(entry.entityType).toBe('documents');
+    expect(entry.entityRef).toBe('904A7C');
+    expect(entry.title).toBeTruthy();
+    expect(entry.time).toBe('2026-08-20T09:15:00Z');
+  });
+
+  it('leaves entityRef null when the audit row has no entity id (e.g. a login)', async () => {
+    const { service } = serviceReturning([
+      { action: 'LOGIN', entity_type: null, entity_id: null, ip_address: null, user_agent: null, timestamp: '2026-08-20T08:00:00Z' },
+    ]);
+
+    const [entry] = await service.listActivityLogs(EMPLOYEE);
+
+    expect(entry.action).toBe('LOGIN');
+    expect(entry.entityRef).toBeNull();
+  });
+
+  it("only ever reads the caller's own audit rows", async () => {
+    const { service, client } = serviceReturning([]);
+
+    await service.listActivityLogs(EMPLOYEE);
+
+    const chain = (client.from as jest.Mock).mock.results[0].value as { eq: jest.Mock };
+    expect(chain.eq).toHaveBeenCalledWith('actor_id', EMPLOYEE.id);
   });
 });

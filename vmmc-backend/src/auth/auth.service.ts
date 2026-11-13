@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { AuditService } from '../audit/audit.service';
-import { validateEmployeeId } from '../common/assert-access';
+import { getNextEmployeeId, normalizeEmployeeId, validateEmployeeId } from '../common/assert-access';
 import { describeUserAgent } from '../common/describe-user-agent';
 import { EmailChannel } from '../notifications/channels/email.channel';
 import { buildLoginOtpEmail } from '../notifications/email-templates/login-otp.template';
@@ -211,29 +211,73 @@ export class AuthService {
     return this.finishLogin(employee, { access_token: data.access_token, expires_at: data.token_expires_at }, context);
   }
 
-  async signup(employeeId: string, employmentType?: 'PERMANENT' | 'COS') {
-    const normalizedId = validateEmployeeId(employeeId, employmentType).toUpperCase();
-    const employee = await this.findEmployeeByEmployeeId(normalizedId);
-    if (!employee) throw new BadRequestException('No employee matches that ID. Please contact HR.');
+  async signup(email: string, employmentType: 'PERMANENT' | 'COS' | undefined, privacyAcknowledged: boolean) {
+    if (!privacyAcknowledged) {
+      throw new BadRequestException('Please acknowledge the Privacy Notice before creating an account.');
+    }
+
+    const normalizedType: 'PERMANENT' | 'COS' = employmentType ?? 'PERMANENT';
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      throw new BadRequestException('Please enter a valid email address.');
+    }
+
+    const employee = await this.findEmployeeByContact(trimmedEmail);
+    if (!employee) throw new BadRequestException('No employee matches that email. Please contact HR.');
     if (employee.auth_user_id) throw new BadRequestException('This employee already has an account.');
+
+    const currentYear = new Date().getFullYear();
+    const existingEmployeeIds = await this.listEmployeeIdsByType(normalizedType);
+    const existingEmployeeId = employee.employee_id?.trim();
+
+    let assignedEmployeeId = existingEmployeeId?.trim().toUpperCase();
+    if (assignedEmployeeId) {
+      try {
+        validateEmployeeId(assignedEmployeeId, normalizedType);
+      } catch {
+        assignedEmployeeId = getNextEmployeeId(normalizedType, existingEmployeeIds, currentYear);
+      }
+    } else {
+      assignedEmployeeId = getNextEmployeeId(normalizedType, existingEmployeeIds, currentYear);
+    }
 
     const { data: created, error: createError } = await this.supabaseService.getClient().auth.admin.createUser({
       email: employee.email,
       password: DEFAULT_PASSWORD,
       email_confirm: true,
-      user_metadata: { employee_id: employee.employee_id },
+      user_metadata: { employee_id: assignedEmployeeId },
     });
     if (createError || !created?.user) throw new BadRequestException(createError?.message ?? 'Unable to create the account.');
 
     const { error: linkError } = await this.supabaseService
       .getClient()
       .from('employees')
-      .update({ auth_user_id: created.user.id, must_change_password: true })
+      .update({ employee_id: assignedEmployeeId, auth_user_id: created.user.id, must_change_password: true })
       .eq('id', employee.id);
     if (linkError) throw new BadRequestException(linkError.message);
 
+    const accountEmail = {
+      subject: 'Your VMMC employee account is ready',
+      text: `Your VMMC employee account has been created.\n\nEmployee ID: ${assignedEmployeeId}\nDefault password: password123\n\nSign in with your employee ID and change your password on first login.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
+          <h2 style="margin-bottom: 12px;">Your VMMC employee account is ready</h2>
+          <p>Your employee ID has been assigned:</p>
+          <p><strong>${assignedEmployeeId}</strong></p>
+          <p>Default password: <strong>password123</strong></p>
+          <p>Sign in with your employee ID and change your password on first login.</p>
+        </div>
+      `,
+    };
+    const emailResult = await this.emailChannel.send(employee.email, accountEmail.subject, accountEmail.text, accountEmail.html);
+
     return {
-      message: 'Account created. Use the default password password123 to sign in. You will be required to change it on first login.',
+      employeeId: assignedEmployeeId,
+      emailStatus: emailResult.status,
+      message:
+        emailResult.status === 'SENT'
+          ? 'Account created. The account details email was accepted by the email provider.'
+          : 'Account created, but the account details email was not sent. Use the credentials shown here and contact support if needed.',
     };
   }
 
@@ -417,12 +461,23 @@ export class AuthService {
     }
   }
 
+  private async listEmployeeIdsByType(employmentType: 'PERMANENT' | 'COS') {
+    const pattern = employmentType === 'COS' ? 'VMMC-COS-%' : 'VMMC-%';
+    const { data } = await this.supabaseService
+      .getClient()
+      .from('employees')
+      .select('employee_id')
+      .like('employee_id', pattern);
+
+    return (data ?? []).map((row) => row.employee_id).filter(Boolean) as string[];
+  }
+
   private async findEmployeeByEmployeeId(employeeId: string): Promise<EmployeeRow | null> {
     const { data } = await this.supabaseService
       .getClient()
       .from('employees')
       .select('id, auth_user_id, employee_id, full_name, job_title, email, phone, role, department_id, must_change_password, two_factor_enabled')
-      .eq('employee_id', employeeId)
+      .eq('employee_id', normalizeEmployeeId(employeeId))
       .maybeSingle();
     return data as EmployeeRow | null;
   }

@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, EyeOff } from 'lucide-react'
 import VmmcSeal from '@/components/VmmcSeal'
+import OtpInput from '@/components/OtpInput'
 import { fadeRise } from '@/lib/motion'
 import { login, type AuthSession, setPasswordChangeRequired } from '@/lib/auth'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
@@ -14,6 +16,9 @@ interface MfaRequiredResponse {
   employeeId: string
   portal: 'staff' | 'admin'
 }
+
+/** How long the "Resend code" button waits after a code goes out, so a slow email isn't answered with a pile of new ones. */
+const RESEND_COOLDOWN_SECONDS = 30
 
 export default function Login() {
   const router = useRouter()
@@ -27,6 +32,34 @@ export default function Login() {
   const [apiError, setApiError] = useState('')
   const [mfaStep, setMfaStep] = useState(false)
   const [otp, setOtp] = useState('')
+  const [resendAt, setResendAt] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
+  const [resending, setResending] = useState(false)
+  const [resentNotice, setResentNotice] = useState(false)
+
+  // The cooldown is a fixed deadline, not "count down one tick at a time": a phone browser pauses timers while the
+  // person is in their email app, and a tick-counter would still say "in 22s" long after 30s had really passed.
+  const resendIn = Math.max(0, Math.ceil((resendAt - now) / 1000))
+  const startResendCooldown = () => {
+    const t = Date.now()
+    setNow(t)
+    setResendAt(t + RESEND_COOLDOWN_SECONDS * 1000)
+  }
+
+  useEffect(() => {
+    if (resendAt <= Date.now()) return
+    const sync = () => {
+      const t = Date.now()
+      setNow(t)
+      if (t >= resendAt) clearInterval(timer)
+    }
+    const timer = setInterval(sync, 1000)
+    document.addEventListener('visibilitychange', sync)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', sync)
+    }
+  }, [resendAt])
 
   const missingFields = !employeeId.trim() || !password.trim()
 
@@ -64,6 +97,8 @@ export default function Login() {
       })
       if ('mfaRequired' in result) {
         setMfaStep(true)
+        startResendCooldown()
+        setResentNotice(false)
         return
       }
       finishLogin(result)
@@ -88,8 +123,38 @@ export default function Login() {
       finishLogin(session)
     } catch (err) {
       handleApiError(err, 'Invalid or expired code.')
+      // A rejected code is useless to edit digit by digit: start the boxes over. A dropped connection keeps what was typed.
+      if (err instanceof ApiError) setOtp('')
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  /** Asks for a fresh code by repeating the password step. The password is still in memory from a moment ago, and
+   * requiring it is the point: a resend that took only an Employee ID would let anyone flood a colleague's inbox.
+   * The newest code replaces the older one, so only the latest email works. */
+  const handleResend = async () => {
+    if (resendIn > 0 || resending) return
+    setApiError('')
+    setResentNotice(false)
+    setResending(true)
+    try {
+      const result = await api.post<AuthSession | MfaRequiredResponse>('/auth/login', {
+        employeeId: employeeId.trim(),
+        password,
+        portal: activeTab,
+      })
+      if ('mfaRequired' in result) {
+        setOtp('')
+        startResendCooldown()
+        setResentNotice(true)
+        return
+      }
+      finishLogin(result)
+    } catch (err) {
+      handleApiError(err, 'Could not send a new code. Please log in again.')
+    } finally {
+      setResending(false)
     }
   }
 
@@ -97,6 +162,8 @@ export default function Login() {
     setMfaStep(false)
     setOtp('')
     setApiError('')
+    setResendAt(0)
+    setResentNotice(false)
   }
 
   const tabRow = (
@@ -119,10 +186,21 @@ export default function Login() {
   const employeeIdField = (
     <div style={{ marginBottom: 16 }}>
       <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Employee ID</label>
-      <input value={employeeId} onChange={e => setEmployeeId(e.target.value)} placeholder="Enter ID number"
+      <input value={employeeId} placeholder="Enter ID number"
+        // Employee IDs are all capitals (VMMC-25-0024), so whatever is typed or pasted shows as capitals: nobody has to
+        // mind Caps Lock. Same length in and out, so the caret is put back where it was (setting a changed value on a
+        // controlled input would otherwise throw it to the end). The backend folds case too, so this is only for the eye.
+        onChange={e => {
+          const input = e.currentTarget
+          const { selectionStart, selectionEnd } = input
+          setEmployeeId(input.value.toUpperCase())
+          requestAnimationFrame(() => { if (document.activeElement === input) input.setSelectionRange(selectionStart, selectionEnd) })
+        }}
+        autoCapitalize="characters" autoCorrect="off" spellCheck={false}
         style={{ width: '100%', padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
         onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
         onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
+        onKeyDown={e => { if (e.key === 'Enter') handleLogin() }}
       />
     </div>
   )
@@ -135,6 +213,7 @@ export default function Login() {
           style={{ width: '100%', padding: '14px 40px 14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
           onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
           onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
+          onKeyDown={e => { if (e.key === 'Enter') handleLogin() }}
         />
         <button onClick={() => setShowPassword(v => !v)} style={{ position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', padding: 0 }}>
           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -191,10 +270,9 @@ export default function Login() {
   const finePrint = (
     <>
       <p style={{ fontSize: 12, color: '#4a5568', textAlign: 'center', marginBottom: 32, lineHeight: 1.6, fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-        BY LOGGING IN, YOU AGREE TO THE<br/>
-        <span style={{ fontWeight: 800, color: '#1f3151', cursor: 'pointer' }}>TERMS OF SERVICE</span>
-        {' '}AND{' '}
-        <span style={{ fontWeight: 800, color: '#1f3151', cursor: 'pointer' }}>PRIVACY POLICY</span>
+        Read the{' '}
+        <Link href="/privacy" style={{ fontWeight: 800, color: '#1f3151', textDecoration: 'underline' }}>PRIVACY NOTICE</Link>
+        {' '}to understand how account, health, and security information is handled.
       </p>
       <div style={{ textAlign: 'center' }}>
         <span style={{ fontSize: 12, fontWeight: 800, color: '#3a7d44', letterSpacing: '0.1em', textTransform: 'uppercase' }}>AUTHORIZED ACCESS ONLY</span>
@@ -202,26 +280,20 @@ export default function Login() {
     </>
   )
 
+  const resendBlocked = resendIn > 0 || resending
+  let resendLabel = 'Resend code'
+  if (resending) resendLabel = 'Sending…'
+  else if (resendIn > 0) resendLabel = `Resend code in ${resendIn}s`
+
   const otpStep = (
     <>
       <div style={{ textAlign: 'center', marginBottom: 24 }}>
         <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', marginBottom: 8 }}>Enter Verification Code</div>
-        <p style={{ fontSize: 12, color: '#718096', lineHeight: 1.6, margin: 0 }}>We sent a 6-digit code to the email on your account. It expires in 10 minutes.</p>
+        <p style={{ fontSize: 12, color: '#5a6678', lineHeight: 1.6, margin: 0 }}>We sent a 6-digit code to the email on your account. It expires in 10 minutes.</p>
       </div>
 
       <div style={{ marginBottom: 20 }}>
-        <label htmlFor="login-otp" style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 6 }}>Verification Code</label>
-        <input
-          id="login-otp"
-          value={otp}
-          onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-          placeholder="123456"
-          inputMode="numeric"
-          autoFocus
-          style={{ width: '100%', padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 20, fontWeight: 700, letterSpacing: '0.4em', textAlign: 'center', fontFamily: 'Public Sans,sans-serif', outline: 'none', color: '#1f3151', transition: 'border-color 0.2s', boxSizing: 'border-box' }}
-          onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
-          onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
-        />
+        <OtpInput value={otp} onChange={v => { setOtp(v); if (apiError) setApiError('') }} onEnter={handleVerifyOtp} invalid={!!apiError} disabled={submitting} autoFocus />
       </div>
 
       {loginError}
@@ -237,7 +309,22 @@ export default function Login() {
         {submitting ? 'Verifying…' : 'Verify & Log In'}
       </motion.button>
 
-      <button onClick={backToLogin} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, textDecoration: 'underline', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+      <div style={{ textAlign: 'center', marginBottom: 4 }}>
+        <p style={{ fontSize: 12, color: '#5a6678', lineHeight: 1.6, margin: 0 }}>Didn&apos;t get the email? Check your spam folder, or ask for a new code.</p>
+        <button
+          type="button"
+          onClick={handleResend}
+          disabled={resendBlocked}
+          style={{ background: 'none', border: 'none', padding: '0 12px', minHeight: 44, cursor: resendBlocked ? 'default' : 'pointer', color: resendBlocked ? '#5a6678' : '#047857', fontSize: 12, fontWeight: 700, textDecoration: resendBlocked ? 'none' : 'underline' }}
+        >
+          {resendLabel}
+        </button>
+        <p role="status" style={{ fontSize: 12, fontWeight: 700, color: '#047857', lineHeight: 1.5, margin: 0 }}>
+          {resentNotice ? 'A new code was sent. Use the newest email; the earlier code no longer works.' : ''}
+        </p>
+      </div>
+
+      <button onClick={backToLogin} style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: '#047857', fontSize: 12, fontWeight: 700, textDecoration: 'underline', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
         ← Back to login
       </button>
     </>

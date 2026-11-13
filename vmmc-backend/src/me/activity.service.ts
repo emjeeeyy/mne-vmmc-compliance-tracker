@@ -6,6 +6,7 @@ import { SupabaseService } from '../supabase/supabase.service';
 export interface AuditLogRow {
   action: string;
   entity_type: string | null;
+  entity_id?: string | null;
   ip_address: string | null;
   user_agent: string | null;
   timestamp: string;
@@ -19,6 +20,9 @@ const ENTITY_LABELS: Record<string, string> = {
   'review-queue': 'Review Queue',
   escalations: 'Escalations',
   reports: 'Compliance Reports',
+  registry: 'Modules Registry',
+  'audit-trail': 'System Audit Trail',
+  notifications: 'Notification Log',
   'pep-logs': 'PEP Exposure Log',
   immunizations: 'Immunization Record',
   'pre-employment': 'Pre-Employment Screening',
@@ -38,7 +42,7 @@ const ENTITY_LABELS: Record<string, string> = {
   'me-devices': 'Registered Devices',
 };
 
-function describe(action: string, entityType: string | null): string {
+export function describe(action: string, entityType: string | null): string {
   const label = (entityType && ENTITY_LABELS[entityType]) || 'Record';
   if (action === 'LOGIN') return 'Secure Login Successful';
   if (action === 'LOGIN_FAILED') return 'Failed Login Attempt';
@@ -87,6 +91,7 @@ const NOISE_ACCESS_ENTITY_TYPES = new Set([
   'me-privacy-settings',
   'change-requests',
   'departments',
+  'audit-trail', // the admin Profile fetches the system trail on every visit, to fill its audit table
 ]);
 
 export function isNoise(row: AuditLogRow): boolean {
@@ -110,12 +115,15 @@ const BURST_WINDOW_MS = 3000;
  * (everything in practice lands well under 1s) get merged. `rows` must already
  * be ordered newest-first.
  */
-export function dedupeBursts(rows: AuditLogRow[]): AuditLogRow[] {
-  const result: AuditLogRow[] = [];
+export function dedupeBursts<T extends AuditLogRow>(
+  rows: T[],
+  keyOf: (row: T) => string = (row) => `${row.action}:${row.entity_type ?? ''}`,
+): T[] {
+  const result: T[] = [];
   const lastSeenTime = new Map<string, number>(); // last row of this signature seen so far, kept or not
 
   for (const row of rows) {
-    const signature = `${row.action}:${row.entity_type ?? ''}`;
+    const signature = keyOf(row);
     const time = new Date(row.timestamp).getTime();
     const last = lastSeenTime.get(signature);
     const isBurstDupe = last !== undefined && last - time < BURST_WINDOW_MS;
@@ -138,7 +146,7 @@ export class ActivityService {
     const { data, error } = await this.supabaseService
       .getClient()
       .from('audit_logs')
-      .select('action, entity_type, ip_address, user_agent, timestamp')
+      .select('action, entity_type, entity_id, ip_address, user_agent, timestamp')
       .eq('actor_id', currentUser.id)
       .order('timestamp', { ascending: false })
       .limit(90)
@@ -152,6 +160,10 @@ export class ActivityService {
         title: describe(row.action, row.entity_type),
         time: row.timestamp,
         ip: row.ip_address,
+        // Raw audit codes for Profile's audit-trail table (action/resource columns) and the data-log export.
+        action: row.action,
+        entityType: row.entity_type,
+        entityRef: row.entity_id ? row.entity_id.replace(/-/g, '').slice(0, 6).toUpperCase() : null,
       }));
   }
 

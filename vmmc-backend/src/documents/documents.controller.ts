@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Patch, Post, Headers, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Headers, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -28,9 +28,16 @@ export class DocumentsController {
       type: 'object',
       properties: {
         file: { type: 'string', format: 'binary' },
+        category: { type: 'string', enum: ['APE', 'HEPB_TITER'] },
         examDate: { type: 'string', format: 'date' },
-        cxrResult: { type: 'string', enum: ['CLEARED', 'INFILTRATE'] },
-        genexpertResult: { type: 'string', enum: ['NOT_DETECTED', 'DETECTED'] },
+        // Optional and no longer sent by the app: the reviewer records the result when approving. Kept so an older
+        // client still works; a value sent here is only a pre-fill for the reviewer to confirm or correct.
+        cxrResult: { type: 'string', enum: ['CLEARED', 'INFILTRATE'], description: 'Optional pre-fill; the reviewer records the result.' },
+        genexpertResult: { type: 'string', enum: ['NOT_DETECTED', 'DETECTED'], description: 'Optional pre-fill; the reviewer records the result.' },
+        titerResult: { type: 'string', enum: ['REACTIVE', 'NON_REACTIVE'], description: 'Optional pre-fill; the reviewer records the result.' },
+        title: { type: 'string' },
+        facilityName: { type: 'string' },
+        notes: { type: 'string' },
       },
     },
   })
@@ -44,8 +51,16 @@ export class DocumentsController {
     return this.documentsService.upload(employee, file, dto, idempotencyKey);
   }
 
+  /** A short-lived link to view an uploaded file. Access follows assertDocumentAccess: the owner, ADMIN, a unit
+   * head for their own department, and TB DOTS / HR staff. */
+  @Get(':id/file-url')
+  getFileUrl(@CurrentUser() currentUser: EmployeeContext, @Param('id') id: string) {
+    return this.documentsService.getFileUrl(currentUser, id);
+  }
+
+  /** Approving or rejecting is the TB DOTS administrator's job (they read the file, record the result and sign). */
   @Patch(':id/review')
-  @Roles('ADMIN', 'UNIT_HEAD')
+  @Roles('ADMIN')
   review(@CurrentUser() currentUser: EmployeeContext, @Param('id') id: string, @Body() dto: ReviewDocumentDto) {
     return this.documentsService.review(currentUser, id, dto);
   }

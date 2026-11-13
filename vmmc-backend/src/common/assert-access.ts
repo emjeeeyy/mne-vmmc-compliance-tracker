@@ -9,6 +9,31 @@ export function buildEmployeeId(employmentType: EmploymentType, year: number, se
   return employmentType === 'COS' ? `VMMC-COS-${yearSuffix}-${sequenceSuffix}` : `VMMC-${yearSuffix}-${sequenceSuffix}`;
 }
 
+export function getNextEmployeeId(
+  employmentType: EmploymentType,
+  existingEmployeeIds: string[],
+  year = new Date().getFullYear(),
+): string {
+  const yearSuffix = String(year).slice(-2);
+  const regex =
+    employmentType === 'COS' ? /^VMMC-COS-(\d{2})-(\d{4})$/i : /^VMMC-(\d{2})-(\d{4})$/i;
+
+  let maxSequence = 0;
+
+  for (const employeeId of existingEmployeeIds) {
+    const match = employeeId?.trim().match(regex);
+    if (!match) continue;
+
+    const parsedYear = Number(`20${match[1]}`);
+    if (parsedYear !== year) continue;
+
+    const sequence = Number(match[2]);
+    if (sequence > maxSequence) maxSequence = sequence;
+  }
+
+  return buildEmployeeId(employmentType, year, maxSequence + 1);
+}
+
 // BadRequestException, not a plain Error — AllExceptionsFilter deliberately sanitizes any
 // non-HttpException down to a generic "Internal server error." (500), a real security boundary
 // for genuinely unexpected crashes. A plain Error here meant this function's own specific,
@@ -32,6 +57,16 @@ export function validateEmployeeId(employeeId: string, expectedType?: Employment
   }
 
   throw new BadRequestException('Employee ID must match VMMC-YY-NNNN or VMMC-COS-YY-NNNN.');
+}
+
+/**
+ * Folds an Employee ID typed at login (and OTP / first-login) to the stored form: trimmed and upper-case, so
+ * "vmmc-25-0024" finds VMMC-25-0024. Deliberately does NOT validate the format (unlike validateEmployeeId, which
+ * throws a 400 that spells out the format rules): a malformed ID should just fail to match, with the same generic
+ * "Invalid Employee ID or password" as a wrong one. Never apply this to passwords; those stay case-sensitive.
+ */
+export function normalizeEmployeeId(raw: string): string {
+  return (raw ?? '').trim().toUpperCase();
 }
 
 /**

@@ -42,7 +42,8 @@ export function isAuthenticated() {
 
 /** Called by Login.tsx once the real login API call succeeds. */
 export function login(session: AuthSession) {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
+  const { accessToken: _accessToken, ...safeSession } = session
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(safeSession))
 }
 
 export function setPasswordChangeRequired(required: boolean) {
@@ -52,22 +53,40 @@ export function setPasswordChangeRequired(required: boolean) {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session))
 }
 
+/** Fired on `window` after the stored user changes, so already-mounted UI (the navbar) can re-read it. */
+export const USER_UPDATED_EVENT = 'vmmc:user-updated'
+
+/** The session with the self-editable identity fields replaced (pure, so it can be unit-tested). */
+export function withUserUpdate(session: AuthSession, patch: Partial<Pick<AuthUser, 'fullName' | 'email'>>): AuthSession {
+  return { ...session, user: { ...session.user, ...patch } }
+}
+
+/** Call after a successful `PATCH /me/profile`. The navbar reads the name from the session shell written at login,
+ * so without this it keeps showing the old name until the person logs out and back in. */
+export function updateUser(patch: Partial<Pick<AuthUser, 'fullName' | 'email'>>) {
+  const session = readSession()
+  if (!session) return
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(withUserUpdate(session, patch)))
+  window.dispatchEvent(new Event(USER_UPDATED_EVENT))
+}
+
 export function logout() {
   const session = readSession()
   sessionStorage.removeItem(STORAGE_KEY)
 
   if (session) {
-    // Best-effort session revoke — mirrors the backend's own best-effort logout.
-    // Not awaited: the UI navigates away immediately either way.
     fetch(`${process.env.NEXT_PUBLIC_API_URL?.trim() ?? 'http://localhost:8443/api'}/auth/logout`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${session.accessToken}` },
+      credentials: 'include',
     }).catch(() => {})
   }
 }
 
 export function getToken(): string | null {
-  return readSession()?.accessToken ?? null
+  // The real bearer token now lives in an HttpOnly secure cookie. The browser sends it
+  // automatically on same-origin API requests when `credentials: 'include'` is set, and the
+  // frontend keeps only a non-sensitive session shell in sessionStorage for UI state.
+  return null
 }
 
 export function getUser(): AuthUser | null {
@@ -79,7 +98,8 @@ export function requiresPasswordChange(): boolean {
 }
 
 export function getInitials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean)
+  // Drop trailing credentials ("Maria Santos, RN" -> "Maria Santos") so they don't become the last initial.
+  const parts = name.split(',')[0].trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return ''
   return (parts[0][0] + (parts[parts.length - 1][0] ?? '')).toUpperCase()
 }

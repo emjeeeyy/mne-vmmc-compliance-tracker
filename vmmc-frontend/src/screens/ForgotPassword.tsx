@@ -1,10 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ChevronLeft, BadgeCheck } from 'lucide-react'
 import VmmcSeal from '@/components/VmmcSeal'
+import OtpInput from '@/components/OtpInput'
 import { fadeRise } from '@/lib/motion'
 import { api, ApiError, ApiConnectionError } from '@/lib/api'
 
@@ -54,41 +55,6 @@ function contactValidationError(value: string) {
   return isValidEmail(trimmed) ? '' : 'Please enter a valid email address.'
 }
 
-function OtpInput({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  const refs = useRef<(HTMLInputElement | null)[]>([])
-
-  const handleChange = (i: number, raw: string) => {
-    const digit = raw.replace(/\D/g, '').slice(-1)
-    const next = [...value]
-    next[i] = digit
-    onChange(next)
-    if (digit && i < 5) refs.current[i + 1]?.focus()
-  }
-
-  const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !value[i] && i > 0) refs.current[i - 1]?.focus()
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
-      {value.map((digit, i) => (
-        <input
-          key={i}
-          ref={el => { refs.current[i] = el }}
-          value={digit}
-          onChange={e => handleChange(i, e.target.value)}
-          onKeyDown={e => handleKeyDown(i, e)}
-          inputMode="numeric"
-          maxLength={1}
-          style={{ width: 44, height: 52, textAlign: 'center', fontSize: 20, fontWeight: 700, color: '#1f3151', border: '1px solid #e2e8f0', borderRadius: 10, outline: 'none', fontFamily: 'Poppins,sans-serif', boxSizing: 'border-box' }}
-          onFocus={e => { e.currentTarget.style.borderColor = '#008d46' }}
-          onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
-        />
-      ))}
-    </div>
-  )
-}
-
 function apiErrorMessage(err: unknown, fallback: string) {
   if (err instanceof ApiError) return err.message || fallback
   if (err instanceof ApiConnectionError) return 'Connection is slow or unavailable. Please try again.'
@@ -99,7 +65,7 @@ export default function ForgotPassword() {
   const router = useRouter()
   const [step, setStep] = useState<'request' | 'verify' | 'reset'>('request')
   const [contact, setContact] = useState('')
-  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', ''])
+  const [otp, setOtp] = useState('')
   const [resent, setResent] = useState(false)
   const [contactAttempted, setContactAttempted] = useState(false)
   const [newPassword, setNewPassword] = useState('')
@@ -147,18 +113,20 @@ export default function ForgotPassword() {
   }
 
   const handleVerify = async () => {
-    if (otp.some(d => !d) || submitting) return
+    if (otp.length !== 6 || submitting) return
     setOtpError('')
     setSubmitting(true)
     try {
       const { resetToken } = await api.post<{ resetToken: string }>('/auth/verify-otp', {
         contact: contact.trim(),
-        otp: otp.join(''),
+        otp,
       })
       setResetToken(resetToken)
       setStep('reset')
     } catch (err) {
       setOtpError(apiErrorMessage(err, 'Invalid or expired code.'))
+      // A rejected code is useless to edit digit by digit: start the boxes over. A dropped connection keeps what was typed.
+      if (err instanceof ApiError) setOtp('')
     } finally {
       setSubmitting(false)
     }
@@ -331,7 +299,7 @@ export default function ForgotPassword() {
               We sent a reset link to {maskedContact}. Enter the 6 digit code mentioned in the text.
             </p>
             <div>
-              <OtpInput value={otp} onChange={setOtp} />
+              <OtpInput value={otp} onChange={v => { setOtp(v); if (otpError) setOtpError('') }} onEnter={handleVerify} invalid={!!otpError} disabled={submitting} label="Reset code" labelHidden autoFocus />
               {otpErrorNote}
               <div style={{ marginTop: 28 }}>{verifyButton}</div>
               {resendRow}
@@ -504,7 +472,7 @@ export default function ForgotPassword() {
                     We sent a reset link to {maskedContact}. Enter the 6 digit code mentioned in the text.
                   </p>
 
-                  <OtpInput value={otp} onChange={setOtp} />
+                  <OtpInput value={otp} onChange={v => { setOtp(v); if (otpError) setOtpError('') }} onEnter={handleVerify} invalid={!!otpError} disabled={submitting} label="Reset code" labelHidden autoFocus />
                   {otpErrorNote}
                   <div style={{ marginTop: 28 }}>{verifyButton}</div>
                   {resendRow}

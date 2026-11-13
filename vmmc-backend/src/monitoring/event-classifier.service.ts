@@ -1,21 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { SlaSettingsService } from '../compliance/sla-settings.service';
 import { NotificationDispatcherService } from '../notifications/notification-dispatcher.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { ImmunizationRow } from '../tracking/immunizations.service';
 import { PepLogRow } from '../tracking/pep-logs.service';
+import { ApprovedDocument, ClinicalAlertEvent, documentsNeedingClinicalAlert, isPositiveResult } from './clinical-alerts';
 import { ComplianceRecordRow, EventSubtype, EventType } from './types';
 
-const WEEKLY_REMINDER_INTERVAL_DAYS = 7;
-
-interface ApprovedDocument {
-  id: string;
-  cxr_result: string;
-  genexpert_result: string;
-}
-
-function isPositiveResult(doc: ApprovedDocument) {
-  return doc.cxr_result === 'INFILTRATE' || doc.genexpert_result === 'DETECTED';
-}
+const MANUAL_REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 function daysBetween(a: Date, b: Date) {
   return Math.floor((a.getTime() - b.getTime()) / 86_400_000);
@@ -34,62 +26,109 @@ export class EventClassifierService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly notificationDispatcherService: NotificationDispatcherService,
+    private readonly slaSettingsService: SlaSettingsService,
   ) {}
 
-  async classify(record: ComplianceRecordRow, today: Date): Promise<EventSubtype[]> {
-    if (record.status === 'COMPLIANT') return [];
+  /** Admin-triggered "Send Reminder" from the dashboard's follow-up table. Goes through the same
+   * event -> notification pipeline as the automatic reminders (in-app + SMS + email), and is limited
+   * to one per record per 24 hours so the button can't be used to spam someone. */
+  async sendManualReminder(recordId: string): Promise<{ sentAt: string }> {
+    const client = this.supabaseService.getClient();
+    const { data: record } = await client
+      .from('compliance_records')
+      .select('id, employee_id, cycle_year, birthday_date, window_open_date, due_date, status, clinical_status')
+      .eq('id', recordId)
+      .maybeSingle<ComplianceRecordRow>();
+    if (!record) throw new NotFoundException('Compliance record not found.');
+    if (record.status === 'COMPLIANT') throw new BadRequestException('This person is already cleared for the current cycle.');
 
+    const since = new Date(Date.now() - MANUAL_REMINDER_COOLDOWN_MS).toISOString();
+    const { data: recent } = await client
+      .from('events')
+      .select('id')
+      .eq('compliance_record_id', record.id)
+      .eq('event_subtype', 'MANUAL_REMINDER')
+      .gte('detected_at', since)
+      .limit(1);
+    if (recent && recent.length > 0) {
+      throw new ConflictException('A reminder was already sent to this person in the last 24 hours.');
+    }
+
+    const sent = await this.emit(
+      record,
+      'WARNING',
+      'MANUAL_REMINDER',
+      1,
+      'Manual reminder sent by the TB DOTS Unit: annual clearance overdue.',
+    );
+    if (!sent) throw new BadRequestException('The reminder could not be recorded. Please try again.');
+    return { sentAt: new Date().toISOString() };
+  }
+
+  async classify(record: ComplianceRecordRow, today: Date): Promise<EventSubtype[]> {
     const client = this.supabaseService.getClient();
     const emitted: EventSubtype[] = [];
 
     const { data: existingEvents } = await client
       .from('events')
-      .select('event_subtype, detected_at')
+      .select('event_subtype, detected_at, payload')
       .eq('compliance_record_id', record.id)
       .order('detected_at', { ascending: false });
 
     const subtypesSeen = new Set((existingEvents ?? []).map((e) => e.event_subtype));
 
-    if (!existingEvents || existingEvents.length === 0) {
-      await this.emit(record, 'INFORMATIONAL', 'WINDOW_OPENED', 0, `Tracking window opened for cycle ${record.cycle_year}.`);
-      emitted.push('WINDOW_OPENED');
-    }
+    // Nothing is emitted just because a record was scanned. This used to emit a WINDOW_OPENED notice on a record's very
+    // first pass, which is the first scan of the year for everyone, so the bell said "your annual clearance window is
+    // now open" in January to someone whose window opens in October. The real "your window is open" message is
+    // FIRST_REMINDER below, sent on the real date (window_open_date) on every channel. Old WINDOW_OPENED rows stay in
+    // the append-only `events` table and are still labelled for display.
 
-    // Clinical dimension — independent of the SLA timeline, can fire regardless of it.
-    const { data: approvedDoc } = await client
+    // Clinical dimension — independent of the SLA timeline, can fire regardless of it, and runs for everyone, cleared
+    // or not. Every positive approved document of this cycle gets exactly one alert. This used to stop at "already
+    // COMPLIANT" and to alert once per record, so a positive result approved after clearance (a repeat X-ray, a
+    // follow-up GeneXpert) raised nothing, and neither did a new positive after an earlier alert had been dealt with.
+    const { data: approvedRows } = await client
       .from('documents')
-      .select('id, cxr_result, genexpert_result')
+      .select('id, cxr_result, genexpert_result, reviewed_at')
       .eq('compliance_record_id', record.id)
       .eq('review_status', 'APPROVED')
-      .order('reviewed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle<ApprovedDocument>();
+      .order('reviewed_at', { ascending: true })
+      .returns<ApprovedDocument[]>();
+    const approvedDocs = approvedRows ?? [];
 
-    if (approvedDoc) {
-      if (isPositiveResult(approvedDoc)) {
-        if (!subtypesSeen.has('CLINICAL_ALERT')) {
-          await client.from('compliance_records').update({ clinical_status: 'CRITICAL' }).eq('id', record.id);
-          await this.emit(
-            record,
-            'EXCEPTION',
-            'CLINICAL_ALERT',
-            2,
-            'Approved result is positive — restricted pending clinical review.',
-          );
-          emitted.push('CLINICAL_ALERT');
-        }
-      } else if (!subtypesSeen.has('CLEARANCE_RECORDED')) {
-        const clinicalUpdate = record.clinical_status === 'CRITICAL' ? {} : { clinical_status: 'COMPLIANT' };
-        // Positive lead time = cleared before the deadline; negative = cleared after (late clearance).
-        const leadTimeDays = daysBetween(new Date(record.due_date), today);
-        await client
-          .from('compliance_records')
-          .update({ status: 'COMPLIANT', cleared_at: today.toISOString(), lead_time_days: leadTimeDays, ...clinicalUpdate })
-          .eq('id', record.id);
-        await this.emit(record, 'INFORMATIONAL', 'CLEARANCE_RECORDED', 0, 'Negative clearance approved and signed.');
-        emitted.push('CLEARANCE_RECORDED');
-        return emitted; // resolved — no timeline events needed once cleared
-      }
+    const alerts = (existingEvents ?? []).filter((e) => e.event_subtype === 'CLINICAL_ALERT') as ClinicalAlertEvent[];
+    const needAlert = documentsNeedingClinicalAlert(approvedDocs, alerts);
+    if (needAlert.length > 0) {
+      await client.from('compliance_records').update({ clinical_status: 'CRITICAL' }).eq('id', record.id);
+      const sent = await this.emit(
+        record,
+        'EXCEPTION',
+        'CLINICAL_ALERT',
+        2,
+        'Approved result is positive — restricted pending clinical review.',
+        { sourceId: needAlert[needAlert.length - 1].id, sourceIds: needAlert.map((doc) => doc.id) },
+      );
+      if (sent) emitted.push('CLINICAL_ALERT');
+    }
+
+    // Once cleared there is no deadline left to track; only the clinical check above still applies.
+    if (record.status === 'COMPLIANT') return emitted;
+
+    // A negative latest result clears the record. A CRITICAL status (already set, or set just above) is never
+    // downgraded by it: the person stays restricted pending clinical review.
+    const latest = approvedDocs[approvedDocs.length - 1];
+    if (latest && !isPositiveResult(latest) && !subtypesSeen.has('CLEARANCE_RECORDED')) {
+      const critical = record.clinical_status === 'CRITICAL' || needAlert.length > 0;
+      const clinicalUpdate = critical ? {} : { clinical_status: 'COMPLIANT' };
+      // Positive lead time = cleared before the deadline; negative = cleared after (late clearance).
+      const leadTimeDays = daysBetween(new Date(record.due_date), today);
+      await client
+        .from('compliance_records')
+        .update({ status: 'COMPLIANT', cleared_at: today.toISOString(), lead_time_days: leadTimeDays, ...clinicalUpdate })
+        .eq('id', record.id);
+      await this.emit(record, 'INFORMATIONAL', 'CLEARANCE_RECORDED', 0, 'Negative clearance approved and signed.');
+      emitted.push('CLEARANCE_RECORDED');
+      return emitted; // resolved — no timeline events needed once cleared
     }
 
     // Timeline dimension.
@@ -124,11 +163,14 @@ export class EventClassifierService {
         await this.emit(record, 'WARNING', 'BIRTHDAY_DUE', 1, 'Birthday reached with no submission yet.');
         emitted.push('BIRTHDAY_DUE');
       } else {
+        // Whether weekly reminders go out at all, and how many days apart, come from the APE SLA row (they used to be a
+        // hard-coded 7). The birthday-day and overdue notices do not depend on this.
+        const sla = await this.slaSettingsService.getApe();
         const lastReminder = existingEvents?.find(
           (e) => e.event_subtype === 'BIRTHDAY_DUE' || e.event_subtype === 'WEEKLY_REMINDER',
         );
         const daysSince = lastReminder ? daysBetween(today, new Date(lastReminder.detected_at)) : Infinity;
-        if (daysSince >= WEEKLY_REMINDER_INTERVAL_DAYS) {
+        if (sla.weeklyReminderEnabled && daysSince >= sla.weeklyReminderIntervalDays) {
           await this.emit(record, 'WARNING', 'WEEKLY_REMINDER', 1, 'Weekly reminder — still no submission.');
           emitted.push('WEEKLY_REMINDER');
         }
@@ -256,6 +298,7 @@ export class EventClassifierService {
     subtype: EventSubtype,
     severity: number,
     message: string,
+    payload?: Record<string, unknown>,
   ) {
     const { data, error } = await this.supabaseService
       .getClient()
@@ -268,15 +311,17 @@ export class EventClassifierService {
         severity,
         message,
         source: 'monitoring-engine',
+        ...(payload ? { payload } : {}),
       })
       .select('id, employee_id, compliance_record_id, event_type, event_subtype, severity, message, detected_at')
       .single();
 
     if (error) {
       this.logger.error(`Failed to emit ${subtype} for record ${record.id}: ${error.message}`);
-      return;
+      return false;
     }
 
     await this.notificationDispatcherService.handleEvent(data);
+    return true;
   }
 }
