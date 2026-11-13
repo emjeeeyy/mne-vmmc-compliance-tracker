@@ -4,19 +4,10 @@ import { NotificationDispatcherService } from '../notifications/notification-dis
 import { SupabaseService } from '../supabase/supabase.service';
 import { ImmunizationRow } from '../tracking/immunizations.service';
 import { PepLogRow } from '../tracking/pep-logs.service';
+import { ApprovedDocument, ClinicalAlertEvent, documentsNeedingClinicalAlert, isPositiveResult } from './clinical-alerts';
 import { ComplianceRecordRow, EventSubtype, EventType } from './types';
 
 const MANUAL_REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-
-interface ApprovedDocument {
-  id: string;
-  cxr_result: string;
-  genexpert_result: string;
-}
-
-function isPositiveResult(doc: ApprovedDocument) {
-  return doc.cxr_result === 'INFILTRATE' || doc.genexpert_result === 'DETECTED';
-}
 
 function daysBetween(a: Date, b: Date) {
   return Math.floor((a.getTime() - b.getTime()) / 86_400_000);
@@ -75,14 +66,12 @@ export class EventClassifierService {
   }
 
   async classify(record: ComplianceRecordRow, today: Date): Promise<EventSubtype[]> {
-    if (record.status === 'COMPLIANT') return [];
-
     const client = this.supabaseService.getClient();
     const emitted: EventSubtype[] = [];
 
     const { data: existingEvents } = await client
       .from('events')
-      .select('event_subtype, detected_at')
+      .select('event_subtype, detected_at, payload')
       .eq('compliance_record_id', record.id)
       .order('detected_at', { ascending: false });
 
@@ -94,41 +83,52 @@ export class EventClassifierService {
     // FIRST_REMINDER below, sent on the real date (window_open_date) on every channel. Old WINDOW_OPENED rows stay in
     // the append-only `events` table and are still labelled for display.
 
-    // Clinical dimension — independent of the SLA timeline, can fire regardless of it.
-    const { data: approvedDoc } = await client
+    // Clinical dimension — independent of the SLA timeline, can fire regardless of it, and runs for everyone, cleared
+    // or not. Every positive approved document of this cycle gets exactly one alert. This used to stop at "already
+    // COMPLIANT" and to alert once per record, so a positive result approved after clearance (a repeat X-ray, a
+    // follow-up GeneXpert) raised nothing, and neither did a new positive after an earlier alert had been dealt with.
+    const { data: approvedRows } = await client
       .from('documents')
-      .select('id, cxr_result, genexpert_result')
+      .select('id, cxr_result, genexpert_result, reviewed_at')
       .eq('compliance_record_id', record.id)
       .eq('review_status', 'APPROVED')
-      .order('reviewed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle<ApprovedDocument>();
+      .order('reviewed_at', { ascending: true })
+      .returns<ApprovedDocument[]>();
+    const approvedDocs = approvedRows ?? [];
 
-    if (approvedDoc) {
-      if (isPositiveResult(approvedDoc)) {
-        if (!subtypesSeen.has('CLINICAL_ALERT')) {
-          await client.from('compliance_records').update({ clinical_status: 'CRITICAL' }).eq('id', record.id);
-          await this.emit(
-            record,
-            'EXCEPTION',
-            'CLINICAL_ALERT',
-            2,
-            'Approved result is positive — restricted pending clinical review.',
-          );
-          emitted.push('CLINICAL_ALERT');
-        }
-      } else if (!subtypesSeen.has('CLEARANCE_RECORDED')) {
-        const clinicalUpdate = record.clinical_status === 'CRITICAL' ? {} : { clinical_status: 'COMPLIANT' };
-        // Positive lead time = cleared before the deadline; negative = cleared after (late clearance).
-        const leadTimeDays = daysBetween(new Date(record.due_date), today);
-        await client
-          .from('compliance_records')
-          .update({ status: 'COMPLIANT', cleared_at: today.toISOString(), lead_time_days: leadTimeDays, ...clinicalUpdate })
-          .eq('id', record.id);
-        await this.emit(record, 'INFORMATIONAL', 'CLEARANCE_RECORDED', 0, 'Negative clearance approved and signed.');
-        emitted.push('CLEARANCE_RECORDED');
-        return emitted; // resolved — no timeline events needed once cleared
-      }
+    const alerts = (existingEvents ?? []).filter((e) => e.event_subtype === 'CLINICAL_ALERT') as ClinicalAlertEvent[];
+    const needAlert = documentsNeedingClinicalAlert(approvedDocs, alerts);
+    if (needAlert.length > 0) {
+      await client.from('compliance_records').update({ clinical_status: 'CRITICAL' }).eq('id', record.id);
+      const sent = await this.emit(
+        record,
+        'EXCEPTION',
+        'CLINICAL_ALERT',
+        2,
+        'Approved result is positive — restricted pending clinical review.',
+        { sourceId: needAlert[needAlert.length - 1].id, sourceIds: needAlert.map((doc) => doc.id) },
+      );
+      if (sent) emitted.push('CLINICAL_ALERT');
+    }
+
+    // Once cleared there is no deadline left to track; only the clinical check above still applies.
+    if (record.status === 'COMPLIANT') return emitted;
+
+    // A negative latest result clears the record. A CRITICAL status (already set, or set just above) is never
+    // downgraded by it: the person stays restricted pending clinical review.
+    const latest = approvedDocs[approvedDocs.length - 1];
+    if (latest && !isPositiveResult(latest) && !subtypesSeen.has('CLEARANCE_RECORDED')) {
+      const critical = record.clinical_status === 'CRITICAL' || needAlert.length > 0;
+      const clinicalUpdate = critical ? {} : { clinical_status: 'COMPLIANT' };
+      // Positive lead time = cleared before the deadline; negative = cleared after (late clearance).
+      const leadTimeDays = daysBetween(new Date(record.due_date), today);
+      await client
+        .from('compliance_records')
+        .update({ status: 'COMPLIANT', cleared_at: today.toISOString(), lead_time_days: leadTimeDays, ...clinicalUpdate })
+        .eq('id', record.id);
+      await this.emit(record, 'INFORMATIONAL', 'CLEARANCE_RECORDED', 0, 'Negative clearance approved and signed.');
+      emitted.push('CLEARANCE_RECORDED');
+      return emitted; // resolved — no timeline events needed once cleared
     }
 
     // Timeline dimension.
@@ -298,6 +298,7 @@ export class EventClassifierService {
     subtype: EventSubtype,
     severity: number,
     message: string,
+    payload?: Record<string, unknown>,
   ) {
     const { data, error } = await this.supabaseService
       .getClient()
@@ -310,6 +311,7 @@ export class EventClassifierService {
         severity,
         message,
         source: 'monitoring-engine',
+        ...(payload ? { payload } : {}),
       })
       .select('id, employee_id, compliance_record_id, event_type, event_subtype, severity, message, detected_at')
       .single();

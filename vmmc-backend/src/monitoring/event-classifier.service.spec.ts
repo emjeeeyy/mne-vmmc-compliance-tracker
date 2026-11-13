@@ -30,6 +30,8 @@ const EVENT_ROW = {
   detected_at: new Date().toISOString(),
 };
 
+const APPROVED_NEGATIVE = { id: 'doc-1', cxr_result: 'CLEARED', genexpert_result: 'NOT_DETECTED', reviewed_at: '2026-06-09T00:00:00Z' };
+
 function slaSettings(over: Partial<ApeSlaSettings> = {}) {
   return { getApe: jest.fn().mockResolvedValue({ ...DEFAULT_APE_SLA_SETTINGS, ...over }) } as unknown as SlaSettingsService;
 }
@@ -43,11 +45,15 @@ function buildClassifier(chainResults: { data: unknown; error: unknown }[], sla:
 }
 
 describe('EventClassifierService.classify', () => {
-  it('is a no-op for an already-COMPLIANT record (does not touch the database at all)', async () => {
-    const { classifier, calls } = buildClassifier([]);
-    const emitted = await classifier.classify(makeRecord({ status: 'COMPLIANT' }), new Date('2026-06-10'));
+  it('for an already-COMPLIANT record with nothing positive: reads only, emits and writes nothing, no deadline logic', async () => {
+    const { classifier, calls, notificationDispatcherService } = buildClassifier([
+      { data: [], error: null }, // existingEvents
+      { data: [APPROVED_NEGATIVE], error: null }, // approved documents: one negative
+    ]);
+    const emitted = await classifier.classify(makeRecord({ status: 'COMPLIANT' }), new Date('2026-07-10')); // even past the deadline
     expect(emitted).toEqual([]);
-    expect(calls).toEqual([]);
+    expect(calls).toEqual(['events', 'documents']);
+    expect(notificationDispatcherService.handleEvent).not.toHaveBeenCalled();
   });
 
   it('says nothing before the person\'s window opens, even on the very first scan of a record', async () => {
@@ -113,7 +119,7 @@ describe('EventClassifierService.classify', () => {
   it('emits CLINICAL_ALERT (Exception) when the approved document is a positive result', async () => {
     const { classifier } = buildClassifier([
       { data: [{ event_subtype: 'WINDOW_OPENED', detected_at: '2026-06-01T00:00:00Z' }], error: null },
-      { data: { id: 'doc-1', cxr_result: 'INFILTRATE', genexpert_result: 'NOT_DETECTED' }, error: null }, // positive approvedDoc
+      { data: [{ id: 'doc-1', cxr_result: 'INFILTRATE', genexpert_result: 'NOT_DETECTED', reviewed_at: '2026-06-09T00:00:00Z' }], error: null }, // one positive approved document
       { data: null, error: null }, // compliance_records update -> clinical_status CRITICAL
       { data: EVENT_ROW, error: null }, // emit(CLINICAL_ALERT)
       // today is also within the window (before birthday) -> FIRST_REMINDER also fires,
@@ -130,7 +136,7 @@ describe('EventClassifierService.classify', () => {
     const today = new Date('2026-07-10'); // 10 days AFTER the deadline
     const { classifier } = buildClassifier([
       { data: [{ event_subtype: 'WINDOW_OPENED', detected_at: '2026-06-01T00:00:00Z' }], error: null },
-      { data: { id: 'doc-1', cxr_result: 'CLEARED', genexpert_result: 'NOT_DETECTED' }, error: null }, // negative approvedDoc
+      { data: [APPROVED_NEGATIVE], error: null }, // negative approved document
       { data: null, error: null }, // compliance_records update -> COMPLIANT
       { data: EVENT_ROW, error: null }, // emit(CLEARANCE_RECORDED)
     ]);
@@ -141,7 +147,7 @@ describe('EventClassifierService.classify', () => {
   it('computes lead_time_days as (due_date - today): positive when cleared early', async () => {
     const { client, calls } = createSupabaseClientMock([
       { data: [{ event_subtype: 'WINDOW_OPENED', detected_at: '2026-06-01T00:00:00Z' }], error: null },
-      { data: { id: 'doc-1', cxr_result: 'CLEARED', genexpert_result: 'NOT_DETECTED' }, error: null },
+      { data: [APPROVED_NEGATIVE], error: null },
       { data: null, error: null },
       { data: EVENT_ROW, error: null },
     ]);
@@ -351,5 +357,120 @@ describe('EventClassifierService.sendManualReminder — admin "Send Reminder"', 
 
     await expect(classifier.sendManualReminder('record-1')).rejects.toMatchObject({ status: 400 });
     expect(notificationDispatcherService.handleEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('EventClassifierService.classify — a clinical alert for every positive approved document', () => {
+  const doc = (id: string, positive: boolean, reviewedAt: string) => ({
+    id,
+    cxr_result: positive ? 'INFILTRATE' : 'CLEARED',
+    genexpert_result: 'NOT_DETECTED',
+    reviewed_at: reviewedAt,
+  });
+  const cleared = () => makeRecord({ status: 'COMPLIANT', clinical_status: 'COMPLIANT' });
+
+  function build(chainResults: { data: unknown; error: unknown }[]) {
+    const { client, calls } = createSupabaseClientMock(chainResults);
+    const supabaseService = { getClient: jest.fn(() => client) } as unknown as SupabaseService;
+    const dispatcher = { handleEvent: jest.fn().mockResolvedValue(undefined) } as unknown as NotificationDispatcherService;
+    const classifier = new EventClassifierService(supabaseService, dispatcher, slaSettings());
+    return { classifier, client, calls, dispatcher };
+  }
+  const insertedPayload = (client: { from: jest.Mock }, callIndex: number) =>
+    (client.from.mock.results[callIndex].value as { insert: jest.Mock }).insert.mock.calls[0][0].payload;
+
+  it('a positive result approved AFTER the person was cleared raises the alert and marks them Critical (it used to be ignored)', async () => {
+    const { classifier, client, calls, dispatcher } = build([
+      { data: [], error: null }, // existingEvents: no alert yet
+      { data: [doc('d-neg', false, '2026-02-10T00:00:00Z'), doc('d-pos', true, '2026-06-20T00:00:00Z')], error: null },
+      { data: null, error: null }, // compliance_records update -> clinical_status CRITICAL
+      { data: EVENT_ROW, error: null }, // emit(CLINICAL_ALERT)
+    ]);
+    const emitted = await classifier.classify(cleared(), new Date('2026-06-21'));
+    expect(emitted).toEqual(['CLINICAL_ALERT']);
+    expect(calls).toEqual(['events', 'documents', 'compliance_records', 'events']);
+    expect(dispatcher.handleEvent).toHaveBeenCalledTimes(1);
+    const criticalUpdate = (client.from.mock.results[2].value as { update: jest.Mock }).update.mock.calls[0][0];
+    expect(criticalUpdate).toEqual({ clinical_status: 'CRITICAL' }); // clinical only: the deadline status is left alone
+    expect(insertedPayload(client, 3)).toEqual({ sourceId: 'd-pos', sourceIds: ['d-pos'] }); // the alert records which document
+  });
+
+  it('does not alert twice for the same document (re-running the check changes nothing)', async () => {
+    const { classifier, calls } = build([
+      { data: [{ event_subtype: 'CLINICAL_ALERT', detected_at: '2026-06-20T01:00:00Z', payload: { sourceId: 'd-pos', sourceIds: ['d-pos'] } }], error: null },
+      { data: [doc('d-pos', true, '2026-06-20T00:00:00Z')], error: null },
+    ]);
+    expect(await classifier.classify(cleared(), new Date('2026-06-21'))).toEqual([]);
+    expect(calls).toEqual(['events', 'documents']);
+  });
+
+  it('a NEW positive document after an earlier alert alerts again: the first one may already have been dealt with', async () => {
+    const { classifier } = build([
+      { data: [{ event_subtype: 'CLINICAL_ALERT', detected_at: '2026-03-01T01:00:00Z', payload: { sourceId: 'd-1', sourceIds: ['d-1'] } }], error: null },
+      { data: [doc('d-1', true, '2026-03-01T00:00:00Z'), doc('d-2', true, '2026-09-01T00:00:00Z')], error: null },
+      { data: null, error: null },
+      { data: EVENT_ROW, error: null },
+    ]);
+    expect(await classifier.classify(cleared(), new Date('2026-09-02'))).toEqual(['CLINICAL_ALERT']);
+  });
+
+  it('alerts sent before they carried document ids still count: they cover documents approved before them, not after', async () => {
+    const legacyAlert = { event_subtype: 'CLINICAL_ALERT', detected_at: '2026-08-01T05:00:00Z', payload: null };
+    const covered = build([{ data: [legacyAlert], error: null }, { data: [doc('d-1', true, '2026-08-01T04:59:00Z')], error: null }]);
+    expect(await covered.classifier.classify(cleared(), new Date('2026-08-02'))).toEqual([]);
+
+    const laterDoc = build([
+      { data: [legacyAlert], error: null },
+      { data: [doc('d-1', true, '2026-08-01T04:59:00Z'), doc('d-2', true, '2026-08-05T00:00:00Z')], error: null },
+      { data: null, error: null },
+      { data: EVENT_ROW, error: null },
+    ]);
+    expect(await laterDoc.classifier.classify(cleared(), new Date('2026-08-06'))).toEqual(['CLINICAL_ALERT']);
+  });
+
+  it('several positive documents found at once (a backlog) raise ONE alert that covers them all, so they are not alerted again', async () => {
+    const { classifier, client } = build([
+      { data: [], error: null },
+      { data: [doc('d-1', true, '2026-04-01T00:00:00Z'), doc('d-2', true, '2026-05-01T00:00:00Z')], error: null },
+      { data: null, error: null },
+      { data: EVENT_ROW, error: null },
+    ]);
+    expect(await classifier.classify(cleared(), new Date('2026-06-01'))).toEqual(['CLINICAL_ALERT']);
+    expect(insertedPayload(client, 3)).toEqual({ sourceId: 'd-2', sourceIds: ['d-1', 'd-2'] });
+  });
+
+  it('an earlier positive that was missed is alerted even when the latest document is negative, and Critical is never downgraded by the clearance', async () => {
+    const { classifier, client } = build([
+      { data: [], error: null }, // no alert yet
+      { data: [doc('d-pos', true, '2026-06-05T00:00:00Z'), doc('d-neg', false, '2026-06-09T00:00:00Z')], error: null },
+      { data: null, error: null }, // update -> CRITICAL
+      { data: EVENT_ROW, error: null }, // emit(CLINICAL_ALERT)
+      { data: null, error: null }, // update -> COMPLIANT (clearance)
+      { data: EVENT_ROW, error: null }, // emit(CLEARANCE_RECORDED)
+    ]);
+    const emitted = await classifier.classify(makeRecord(), new Date('2026-06-10'));
+    expect(emitted).toEqual(['CLINICAL_ALERT', 'CLEARANCE_RECORDED']);
+    const clearanceUpdate = (client.from.mock.results[4].value as { update: jest.Mock }).update.mock.calls[0][0];
+    expect(clearanceUpdate.status).toBe('COMPLIANT');
+    expect(clearanceUpdate).not.toHaveProperty('clinical_status'); // would have overwritten the Critical set a moment ago
+  });
+
+  it('if the alert could not be recorded it is not reported as sent, so the next scan tries again', async () => {
+    const { classifier } = build([
+      { data: [], error: null },
+      { data: [doc('d-pos', true, '2026-06-20T00:00:00Z')], error: null },
+      { data: null, error: null },
+      { data: null, error: { message: 'insert failed' } }, // emit(CLINICAL_ALERT) fails
+    ]);
+    expect(await classifier.classify(cleared(), new Date('2026-06-21'))).toEqual([]);
+  });
+
+  it('a cleared person with only negative results is left completely alone, however many documents they have', async () => {
+    const { classifier, calls } = build([
+      { data: [], error: null },
+      { data: [doc('a', false, '2026-02-01T00:00:00Z'), doc('b', false, '2026-04-01T00:00:00Z'), doc('c', false, '2026-06-01T00:00:00Z')], error: null },
+    ]);
+    expect(await classifier.classify(cleared(), new Date('2026-06-21'))).toEqual([]);
+    expect(calls).toEqual(['events', 'documents']);
   });
 });
