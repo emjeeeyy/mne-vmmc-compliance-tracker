@@ -91,7 +91,7 @@ Escalations appear on the unit head's dashboard and on the administrator's Notif
 ### 1.5 Security and privacy
 
 - Signing in needs the **password and a 6-digit code emailed to the account** (two-factor authentication). It is on for every account.
-- The sign-in is held in a secure, protected cookie. A session lasts up to **60 minutes**.
+- The sign-in is held in a protected cookie that page scripts cannot read. If the website and the server are hosted on different web addresses, some browsers (Safari on iPhones, private windows) refuse that cookie, so the sign-in is then kept in the browser tab instead and is protected by a strict Content-Security-Policy. A session lasts up to **60 minutes**, and logging out or closing the tab ends it.
 - **Access is enforced by the server**, not just by hiding buttons: a staff member cannot read another person's records even by typing an address by hand.
 - Uploaded documents are stored privately and opened only through short-lived links (about 5 minutes).
 - **Every action is recorded** in an append-only audit log that nobody can edit or delete. Staff can see their own activity; the administrator can see the whole system's.
@@ -107,7 +107,7 @@ Escalations appear on the unit head's dashboard and on the administrator's Notif
 | Email | Brevo (HTTPS API) |
 | Text messages | Semaphore (when switched on; see [Known limitations](#45-known-limitations)) |
 | Hosting | Vercel (web app) and Railway (server) |
-| Automated tests | 223 server unit tests, 109 web unit tests, 20 end-to-end tests |
+| Automated tests | 223 server unit tests, 128 web unit tests, 20 end-to-end tests |
 
 ---
 
@@ -569,7 +569,7 @@ npm run dev        # starts both servers
 
 ```bash
 cd vmmc-backend  && npm test     # Jest: 223 unit tests
-cd vmmc-frontend && npm test     # Vitest: 109 tests
+cd vmmc-frontend && npm test     # Vitest: 128 tests
 npm run test:e2e                 # from the root: Playwright, 20 tests, signs in through 2FA
 ```
 
