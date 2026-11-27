@@ -80,7 +80,7 @@ function StatusPill({ bucket, short }: { bucket: RegistryBucket; short?: boolean
 function ActionButton({ children, onClick, label, tone = 'green' }: { children: ReactNode; onClick: () => void; label: string; tone?: 'green' | 'dark' }) {
   return (
     <button type="button" onClick={onClick} aria-label={label}
-      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 40, minWidth: 64, padding: '0 14px', border: 'none', borderRadius: 8, background: tone === 'dark' ? '#1b2230' : ACTION_GREEN, color: '#fff', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, minHeight: 44, minWidth: 64, padding: '0 14px', border: 'none', borderRadius: 8, background: tone === 'dark' ? '#1b2230' : ACTION_GREEN, color: '#fff', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
     >
       {children}
     </button>

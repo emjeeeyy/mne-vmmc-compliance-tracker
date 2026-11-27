@@ -218,10 +218,10 @@ export default function ForgotPassword() {
 
   const resendRow = (
     <div style={{ textAlign: 'center', marginTop: 20 }}>
-      <span style={{ fontSize: 12, color: '#a0aec0' }}>Didn&apos;t receive the code? </span>
-      <button onClick={handleResend} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, textDecoration: 'underline' }}>Resend</button>
+      <span style={{ fontSize: 12, color: '#5a6678' }}>Didn&apos;t receive the code? </span>
+      <button onClick={handleResend} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#047857', fontSize: 12, fontWeight: 700, textDecoration: 'underline' }}>Resend</button>
       {resent && (
-        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontSize: 12, fontWeight: 700, color: '#008d46', marginTop: 8 }}>
+        <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} style={{ fontSize: 12, fontWeight: 700, color: '#047857', marginTop: 8 }}>
           Code resent!
         </motion.p>
       )}
@@ -234,7 +234,7 @@ export default function ForgotPassword() {
         <BadgeCheck size={72} color="#fff" fill="#008d46" strokeWidth={1.5} style={{ filter: 'drop-shadow(0 8px 16px rgba(0,141,70,0.3))' }} />
       </div>
       <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 18, fontWeight: 700, color: '#1f3151', marginBottom: 8 }}>Successful</div>
-      <p style={{ fontSize: 12, color: '#718096', marginBottom: 32, lineHeight: 1.6, maxWidth: 280, marginLeft: 'auto', marginRight: 'auto' }}>
+      <p style={{ fontSize: 12, color: '#5a6678', marginBottom: 32, lineHeight: 1.6, maxWidth: 280, marginLeft: 'auto', marginRight: 'auto' }}>
         Congratulations! Your password has been changed. Click confirm to login
       </p>
       <motion.button
@@ -273,7 +273,7 @@ export default function ForgotPassword() {
 
         {step === 'request' && (
           <>
-            <p style={{ fontSize: 12, color: '#a0aec0', textAlign: 'center', marginTop: 6, marginBottom: 44 }}>
+            <p style={{ fontSize: 12, color: '#5a6678', textAlign: 'center', marginTop: 6, marginBottom: 44 }}>
               Please enter your email to reset your password.
             </p>
             <div>
@@ -295,7 +295,7 @@ export default function ForgotPassword() {
 
         {step === 'verify' && (
           <>
-            <p style={{ fontSize: 12, color: '#a0aec0', textAlign: 'center', marginTop: 6, marginBottom: 40, lineHeight: 1.6 }}>
+            <p style={{ fontSize: 12, color: '#5a6678', textAlign: 'center', marginTop: 6, marginBottom: 40, lineHeight: 1.6 }}>
               We sent a reset link to {maskedContact}. Enter the 6 digit code mentioned in the text.
             </p>
             <div>
@@ -313,7 +313,7 @@ export default function ForgotPassword() {
               <div style={{ marginTop: 20, marginBottom: 6 }}>
                 <span style={{ fontFamily: 'Poppins,sans-serif', fontSize: 15, fontWeight: 700, color: '#1f3151' }}>Set a new password</span>
               </div>
-              <p style={{ fontSize: 12, color: '#a0aec0', marginBottom: 28, lineHeight: 1.6 }}>
+              <p style={{ fontSize: 12, color: '#5a6678', marginBottom: 28, lineHeight: 1.6 }}>
                 Create a new password. Ensure it differs from previous ones for security
               </p>
 
@@ -403,7 +403,7 @@ export default function ForgotPassword() {
               </motion.div>
             </div>
 
-            <div className="hidden lg:flex" style={{ position: 'absolute', bottom: 32, left: 80, gap: 64, fontSize: 12, color: '#a0aec0', opacity: 0.8, whiteSpace: 'nowrap' }}>
+            <div className="hidden lg:flex" style={{ position: 'absolute', bottom: 32, left: 80, gap: 64, fontSize: 12, color: '#5a6678', whiteSpace: 'nowrap' }}>
               <span style={{ letterSpacing: '0.02em' }}>Veterans Memorial Medical Center • Department of Health</span>
               <span style={{ letterSpacing: '0.02em' }}>Data Privacy Compliant (RA 10173) • Intranet Code Active</span>
             </div>
@@ -421,13 +421,13 @@ export default function ForgotPassword() {
                 <>
                   <button
                     onClick={() => router.push('/login')}
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, minHeight: 44, marginBottom: 20 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#047857', fontSize: 12, fontWeight: 700, padding: 0, minHeight: 44, marginBottom: 20 }}
                   >
                     <ChevronLeft size={14} strokeWidth={2.5} /> Back to Login
                   </button>
 
                   <h2 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>Forgot Password</h2>
-                  <p style={{ fontSize: 12, color: '#718096', marginBottom: 28, lineHeight: 1.6 }}>
+                  <p style={{ fontSize: 12, color: '#5a6678', marginBottom: 28, lineHeight: 1.6 }}>
                     Enter the email address or phone number associated with your account and we&apos;ll send you instructions to reset your password.
                   </p>
 
@@ -448,9 +448,9 @@ export default function ForgotPassword() {
                   {confirmButton}
 
                   <div style={{ textAlign: 'center', marginTop: 28 }}>
-                    <span style={{ fontSize: 12, color: '#718096' }}>
+                    <span style={{ fontSize: 12, color: '#5a6678' }}>
                       Remember your password?{' '}
-                      <button onClick={() => router.push('/login')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, textDecoration: 'underline' }}>
+                      <button onClick={() => router.push('/login')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#047857', fontSize: 12, fontWeight: 700, padding: 0, textDecoration: 'underline' }}>
                         Log In
                       </button>
                     </span>
@@ -462,13 +462,13 @@ export default function ForgotPassword() {
                 <>
                   <button
                     onClick={() => setStep('request')}
-                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, minHeight: 44, marginBottom: 20 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#047857', fontSize: 12, fontWeight: 700, padding: 0, minHeight: 44, marginBottom: 20 }}
                   >
                     <ChevronLeft size={14} strokeWidth={2.5} /> Back
                   </button>
 
                   <h2 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: '#1f3151', marginBottom: 6, textAlign: 'center' }}>{verifyTitle}</h2>
-                  <p style={{ fontSize: 12, color: '#718096', marginBottom: 32, lineHeight: 1.6, textAlign: 'center' }}>
+                  <p style={{ fontSize: 12, color: '#5a6678', marginBottom: 32, lineHeight: 1.6, textAlign: 'center' }}>
                     We sent a reset link to {maskedContact}. Enter the 6 digit code mentioned in the text.
                   </p>
 
@@ -484,13 +484,13 @@ export default function ForgotPassword() {
                   <>
                     <button
                       onClick={() => setStep('verify')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, padding: 0, minHeight: 44, marginBottom: 20 }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#047857', fontSize: 12, fontWeight: 700, padding: 0, minHeight: 44, marginBottom: 20 }}
                     >
                       <ChevronLeft size={14} strokeWidth={2.5} /> Back
                     </button>
 
                     <h2 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>Set a new password</h2>
-                    <p style={{ fontSize: 12, color: '#718096', marginBottom: 28, lineHeight: 1.6 }}>
+                    <p style={{ fontSize: 12, color: '#5a6678', marginBottom: 28, lineHeight: 1.6 }}>
                       Create a new password. Ensure it differs from previous ones for security.
                     </p>
 

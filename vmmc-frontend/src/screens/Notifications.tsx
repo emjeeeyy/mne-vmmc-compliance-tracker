@@ -64,7 +64,7 @@ function Card({ children, index, label }: { children: ReactNode; index: number; 
 function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button type="button" aria-pressed={pressed} onClick={onClick}
-      style={{ minHeight: 40, padding: '0 16px', borderRadius: 999, border: `1.5px solid ${pressed ? GREEN : '#d5dce6'}`, background: pressed ? GREEN : '#fff', color: pressed ? '#fff' : '#1f3151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+      style={{ minHeight: 44, padding: '0 16px', borderRadius: 999, border: `1.5px solid ${pressed ? GREEN : '#d5dce6'}`, background: pressed ? GREEN : '#fff', color: pressed ? '#fff' : '#1f3151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
     >
       {children}
     </button>
@@ -95,14 +95,14 @@ function EscalationRow({ esc, busy, onAct }: { esc: Escalation; busy: boolean; o
         {esc.status === 'RESOLVED' && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#dff3e6', color: '#00643a', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em' }}><Check size={15} aria-hidden="true" /> Resolved</span>}
         {esc.status === 'OPEN' && (
           <button type="button" onClick={() => onAct(esc.id, 'acknowledge')} disabled={busy} aria-label={`Acknowledge escalation for ${esc.employee.fullName}`}
-            style={{ minHeight: 40, padding: '0 18px', border: 'none', borderRadius: 10, background: '#1b2230', color: '#fff', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
+            style={{ minHeight: 44, padding: '0 18px', border: 'none', borderRadius: 10, background: '#1b2230', color: '#fff', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
           >
             Acknowledge
           </button>
         )}
         {esc.status !== 'RESOLVED' && (
           <button type="button" onClick={() => onAct(esc.id, 'resolve')} disabled={busy} aria-label={`Mark escalation for ${esc.employee.fullName} as resolved`}
-            style={{ minHeight: 40, padding: '0 18px', border: 'none', borderRadius: 10, background: '#008541', color: '#fff', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
+            style={{ minHeight: 44, padding: '0 18px', border: 'none', borderRadius: 10, background: '#008541', color: '#fff', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1 }}
           >
             Mark Resolved
           </button>
@@ -144,7 +144,7 @@ function DispatchLog() {
           <p style={{ fontSize: 13, color: '#55667e', margin: '3px 0 0 28px' }}>Reminders and alerts the system has sent to staff, most recent first, with what happened on each channel</p>
         </div>
         <button type="button" onClick={() => void load()} disabled={refreshing}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 40, padding: '0 14px', border: 'none', background: 'none', color: '#00643a', fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 700, cursor: refreshing ? 'default' : 'pointer', opacity: refreshing ? 0.7 : 1 }}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minHeight: 44, padding: '0 14px', border: 'none', background: 'none', color: '#00643a', fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 700, cursor: refreshing ? 'default' : 'pointer', opacity: refreshing ? 0.7 : 1 }}
         >
           <RefreshCw size={17} aria-hidden="true" /> {refreshing ? 'Refreshing…' : 'Refresh Log'}
         </button>
@@ -160,14 +160,14 @@ function DispatchLog() {
             const delivery = deliverySummary(e.channels)
             const tone = TONE[delivery.tone]
             return (
-              <li key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 16, border: '1px solid #e5e9f0', borderRadius: 14, padding: '14px 18px' }}>
+              <li key={e.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, border: '1px solid #e5e9f0', borderRadius: 14, padding: '14px 18px' }}>
                 <span aria-hidden="true" style={{ width: 38, height: 38, borderRadius: 10, background: '#eef1f6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Bell size={17} color="#64748b" fill="#64748b" /></span>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: '1 1 180px', minWidth: 0 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{eventTitle(e.eventSubtype)}</div>
                   <div style={{ fontSize: 13, color: '#4b5563', marginTop: 2, lineHeight: 1.45 }}>{e.employee.fullName} ({e.employee.employeeId}): {e.message}</div>
                   <time dateTime={e.detectedAt} style={{ display: 'block', fontSize: 12, color: '#5f6b7d', marginTop: 4 }}>{formatStamp(e.detectedAt)}</time>
                 </div>
-                <span style={{ alignSelf: 'flex-start', maxWidth: 260, background: tone.bg, color: tone.fg, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.35, textAlign: 'center', flexShrink: 0 }}>{delivery.label}</span>
+                <span style={{ alignSelf: 'flex-start', maxWidth: '100%', background: tone.bg, color: tone.fg, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.35, textAlign: 'center' }}>{delivery.label}</span>
               </li>
             )
           })}
@@ -177,7 +177,7 @@ function DispatchLog() {
       {entries !== null && entries.length > shown && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, flexWrap: 'wrap', marginTop: 18 }}>
           <span style={{ fontSize: 13, color: '#55667e' }}>Showing {shown} of {entries.length}</span>
-          <button type="button" onClick={() => setShown((n) => n + LOG_PAGE)} style={{ minHeight: 40, padding: '0 20px', border: '1px solid #d5dce6', borderRadius: 10, background: '#fff', color: '#1f3151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Show more</button>
+          <button type="button" onClick={() => setShown((n) => n + LOG_PAGE)} style={{ minHeight: 44, padding: '0 20px', border: '1px solid #d5dce6', borderRadius: 10, background: '#fff', color: '#1f3151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>Show more</button>
         </div>
       )}
     </Card>

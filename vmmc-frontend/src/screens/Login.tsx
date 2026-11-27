@@ -170,13 +170,13 @@ export default function Login() {
     <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
       <button
         onClick={() => setActiveTab('staff')}
-        style={{ flex: 1, padding: '12px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', background: activeTab === 'staff' ? 'linear-gradient(to right, #1f3151 0%, #1c4b4f 100%)' : '#f8fafc', color: activeTab === 'staff' ? '#fff' : '#a0aec0', transition: 'all 0.2s' }}
+        style={{ flex: 1, padding: '12px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', background: activeTab === 'staff' ? 'linear-gradient(to right, #1f3151 0%, #1c4b4f 100%)' : '#f8fafc', color: activeTab === 'staff' ? '#fff' : '#5a6678', transition: 'all 0.2s' }}
       >
         Staff Login
       </button>
       <button
         onClick={() => setActiveTab('admin')}
-        style={{ flex: 1, padding: '12px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', background: activeTab === 'admin' ? 'linear-gradient(to right, #1f3151 0%, #1c4b4f 100%)' : '#f8fafc', color: activeTab === 'admin' ? '#fff' : '#a0aec0', transition: 'all 0.2s' }}
+        style={{ flex: 1, padding: '12px 0', minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', background: activeTab === 'admin' ? 'linear-gradient(to right, #1f3151 0%, #1c4b4f 100%)' : '#f8fafc', color: activeTab === 'admin' ? '#fff' : '#5a6678', transition: 'all 0.2s' }}
       >
         Admin Login
       </button>
@@ -215,7 +215,7 @@ export default function Login() {
           onBlur={e => { e.currentTarget.style.borderColor = '#e2e8f0' }}
           onKeyDown={e => { if (e.key === 'Enter') handleLogin() }}
         />
-        <button onClick={() => setShowPassword(v => !v)} style={{ position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', padding: 0 }}>
+        <button type="button" onClick={() => setShowPassword(v => !v)} aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword} style={{ position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', padding: 0 }}>
           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
         </button>
       </div>
@@ -231,14 +231,14 @@ export default function Login() {
         <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} style={{ display: 'none' }} />
         Remember Me
       </label>
-      <button onClick={() => router.push('/forgot-password')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#008d46', fontSize: 12, fontWeight: 700, textDecoration: 'underline', minHeight: 44, display: 'flex', alignItems: 'center' }}>Forgot Password?</button>
+      <button onClick={() => router.push('/forgot-password')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#047857', fontSize: 12, fontWeight: 700, textDecoration: 'underline', minHeight: 44, display: 'flex', alignItems: 'center' }}>Forgot Password?</button>
     </div>
   )
 
   const signupPrompt = (
     <div style={{ textAlign: 'center', marginBottom: 26, fontSize: 12, color: '#4a5568', fontWeight: 600 }}>
       Need an account?{' '}
-      <button onClick={() => router.push('/signup')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#008d46', fontWeight: 800, textDecoration: 'underline' }}>
+      <button onClick={() => router.push('/signup')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: '#047857', fontWeight: 800, textDecoration: 'underline' }}>
         Create one here
       </button>
     </div>
@@ -350,7 +350,7 @@ export default function Login() {
               <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 28, color: '#1f3151', letterSpacing: '-0.02em' }}>VMMC</span>
               <span style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, fontSize: 28, color: '#3a7d44', letterSpacing: '-0.02em' }}>TRACKER</span>
             </div>
-            <div style={{ fontSize: 12, color: '#718096', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginTop: 6, textAlign: 'center' }}>
+            <div style={{ fontSize: 12, color: '#5a6678', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, marginTop: 6, textAlign: 'center' }}>
               TB DOTS &amp; X-RAY COMPLIANCE
             </div>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#1f3151', textAlign: 'center', lineHeight: 1.5, marginTop: 28 }}>
@@ -430,7 +430,7 @@ export default function Login() {
               </motion.div>
             </div>
 
-            <div className="hidden lg:flex" style={{ position: 'absolute', bottom: 32, left: 80, gap: 64, fontSize: 12, color: '#a0aec0', opacity: 0.8, whiteSpace: 'nowrap' }}>
+            <div className="hidden lg:flex" style={{ position: 'absolute', bottom: 32, left: 80, gap: 64, fontSize: 12, color: '#5a6678', whiteSpace: 'nowrap' }}>
               <span style={{ letterSpacing: '0.02em' }}>Veterans Memorial Medical Center • Department of Health</span>
               <span style={{ letterSpacing: '0.02em' }}>Data Privacy Compliant (RA 10173) • Intranet Code Active</span>
             </div>
@@ -445,7 +445,7 @@ export default function Login() {
               style={{ background: '#fff', borderRadius: 32, boxShadow: '0 20px 60px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)', width: '100%', maxWidth: 400 }}
             >
               <h2 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 24, fontWeight: 800, color: '#1f3151', marginBottom: 6 }}>Log In</h2>
-              <p style={{ fontSize: 12, color: '#718096', marginBottom: 28, lineHeight: 1.6 }}>
+              <p style={{ fontSize: 12, color: '#5a6678', marginBottom: 28, lineHeight: 1.6 }}>
                 Input your secure credentials below to enter the active pulmonary compliance registry.
               </p>
 

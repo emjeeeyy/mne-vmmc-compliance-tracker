@@ -47,6 +47,20 @@ const SERIES = [
 
 const REMINDER_COOLDOWN_MS = 24 * 60 * 60 * 1000
 
+/** The frontend and backend deploy separately, so for a short window a new frontend can meet an old backend that
+ * doesn't send these fields yet. Default them so that window shows an empty section, not a crash. */
+export function withAdminDefaults(raw: AdminOverview): AdminOverview {
+  return {
+    ...raw,
+    trackedPercent: raw.trackedPercent ?? 0,
+    previousCycleRate: raw.previousCycleRate ?? null,
+    clearanceCounts: raw.clearanceCounts ?? { upToDate: 0, dueSoon: 0, overdue: 0 },
+    departmentClearance: raw.departmentClearance ?? [],
+    followUps: raw.followUps ?? [],
+    followUpTotal: raw.followUpTotal ?? 0,
+  }
+}
+
 function niceScale(max: number) {
   const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000]
   const step = steps.find(s => Math.ceil(Math.max(max, 1) / s) <= 7) ?? 1000
@@ -178,7 +192,7 @@ function DepartmentBars({ data }: { data: DepartmentClearance[] }) {
 }
 
 /** The goal comes from the database (APE SLA row), next to the real rate, instead of a label typed on the page. */
-function TargetLine({ rate, target }: { rate: number; target: number }) {
+export function TargetLine({ rate, target }: { rate: number; target: number }) {
   const status = targetStatus(rate, target)
   return (
     <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #eef1f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 13 }}>
@@ -188,7 +202,7 @@ function TargetLine({ rate, target }: { rate: number; target: number }) {
   )
 }
 
-function ComplianceDonut({ counts }: { counts: AdminOverview['clearanceCounts'] }) {
+export function ComplianceDonut({ counts }: { counts: AdminOverview['clearanceCounts'] }) {
   const [active, setActive] = useState<number | null>(null)
   const total = counts.upToDate + counts.dueSoon + counts.overdue
   const R = 84
@@ -239,11 +253,11 @@ function ComplianceDonut({ counts }: { counts: AdminOverview['clearanceCounts'] 
 
 type ReminderStatus = 'idle' | 'sending' | 'sent' | 'error'
 
-function ReminderButton({ status, onSend, name }: { status: ReminderStatus; onSend: () => void; name: string }) {
+function ReminderButton({ status, onSend, name, tall }: { status: ReminderStatus; onSend: () => void; name: string; tall?: boolean }) {
   const done = status === 'sent'
   return (
     <button onClick={onSend} disabled={status === 'sending' || done} aria-label={done ? `Reminder sent to ${name}` : `Send reminder to ${name}`}
-      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: 34, padding: '0 14px', border: 'none', borderRadius: 7, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', background: done ? '#e0f3e6' : '#006042', color: done ? '#004b2b' : '#fff', cursor: status === 'sending' || done ? 'default' : 'pointer', opacity: status === 'sending' ? 0.75 : 1 }}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, height: tall ? 44 : 34, padding: '0 14px', border: 'none', borderRadius: 7, fontFamily: 'Poppins,sans-serif', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', background: done ? '#e0f3e6' : '#006042', color: done ? '#004b2b' : '#fff', cursor: status === 'sending' || done ? 'default' : 'pointer', opacity: status === 'sending' ? 0.75 : 1 }}
     >
       {done ? <Check size={14} aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
       {status === 'sending' ? 'Sending…' : done ? 'Reminder Sent' : 'Send Reminder'}
@@ -268,7 +282,7 @@ const FOLLOW_UP_COLUMNS = [
   { label: 'Action', width: '16%', align: 'center' },
 ] as const
 
-function FollowUpCard({ data }: { data: AdminOverview }) {
+export function FollowUpCard({ data }: { data: AdminOverview }) {
   const router = useRouter()
   const [statuses, setStatuses] = useState<Record<string, ReminderStatus>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -356,8 +370,8 @@ function FollowUpCard({ data }: { data: AdminOverview }) {
                   <span style={{ fontSize: 13, fontWeight: 500, color: '#be123c' }}>Due {longDate(e.dueDate)}</span>
                 </div>
                 <div style={{ marginTop: 12 }}>
-                  <ReminderButton status={statusOf(e)} onSend={() => send(e)} name={e.fullName} />
-                  {errors[e.recordId] && <div role="alert" style={{ fontSize: 11, color: '#b42318', marginTop: 3 }}>{errors[e.recordId]}</div>}
+                  <ReminderButton status={statusOf(e)} onSend={() => send(e)} name={e.fullName} tall />
+                  {errors[e.recordId] && <div role="alert" style={{ fontSize: 12, color: '#b42318', marginTop: 3 }}>{errors[e.recordId]}</div>}
                 </div>
               </div>
             ))}
@@ -366,7 +380,7 @@ function FollowUpCard({ data }: { data: AdminOverview }) {
           {followUpTotal > followUps.length && (
             <div style={{ padding: '12px 24px 16px', borderTop: '1px solid #eef1f5', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', fontSize: 13, color: '#5f6b7d' }}>
               <span>Showing the {followUps.length} most overdue of {followUpTotal}.</span>
-              <button onClick={() => router.push('/compliance')} style={{ background: 'none', border: 'none', color: '#047857', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 36 }}>See everyone in Modules Registry →</button>
+              <button onClick={() => router.push('/compliance')} style={{ background: 'none', border: 'none', color: '#047857', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: 'pointer', minHeight: 44 }}>See everyone in Modules Registry →</button>
             </div>
           )}
         </>
@@ -375,21 +389,89 @@ function FollowUpCard({ data }: { data: AdminOverview }) {
   )
 }
 
+/** Phone version of the department chart: one stacked bar per department. The vertical bars above need roughly 40px
+ * per department, which a phone doesn't have. Each row also spells out its three counts in words, so the colours are
+ * never the only way to read it. */
+export function DepartmentRows({ data }: { data: DepartmentClearance[] }) {
+  if (data.length === 0) return <div style={{ padding: '24px 0 8px', textAlign: 'center', fontSize: 13, color: '#5f6b7d' }}>No clearance records for this cycle yet.</div>
+  const WORDS = { upToDate: 'cleared', dueSoon: 'due soon', overdue: 'overdue' } as const
+  return (
+    <div>
+      <ul style={{ listStyle: 'none', margin: '16px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {data.map(d => {
+          const total = d.upToDate + d.dueSoon + d.overdue
+          return (
+            <li key={d.code}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                <span style={{ minWidth: 0, fontSize: 13, fontWeight: 700, color: '#1f3151', overflowWrap: 'anywhere' }}>{d.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#5f6b7d', whiteSpace: 'nowrap' }}>{total} staff</span>
+              </div>
+              <div aria-hidden="true" style={{ display: 'flex', gap: 2, height: 10, borderRadius: 999, overflow: 'hidden', background: '#eef1f5', marginTop: 6 }}>
+                {SERIES.map(s => d[s.key] > 0 && <div key={s.key} style={{ flex: d[s.key], background: s.color }} />)}
+              </div>
+              <div style={{ fontSize: 12, color: '#374151', marginTop: 6 }}>{SERIES.map(s => `${d[s.key]} ${WORDS[s.key]}`).join(' · ')}</div>
+            </li>
+          )
+        })}
+      </ul>
+      <Legend items={SERIES.map(s => ({ color: s.color, label: s.barLabel }))} />
+    </div>
+  )
+}
+
+/** Everything the desktop Health Overview has that the phone's "Hospital Metrics" screen was missing: the due-soon and
+ * action-required counts, the department chart, the compliance ratio with its target, and the overdue follow-up list
+ * with its working "Send Reminder". The phone keeps its own look; the charts and the follow-up list are the same
+ * components the desktop uses. */
+export function AdminPhoneOverview({ data: raw }: { data: AdminOverview }) {
+  const data = withAdminDefaults(raw)
+  const { clearanceCounts: counts } = data
+  const phoneCard = { background: '#fff', borderRadius: 20, padding: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 16 } as const
+  const phoneTitle = { fontSize: 12, fontWeight: 800, color: '#1f3151', textTransform: 'uppercase', letterSpacing: '0.03em' } as const
+  const tile = { background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)', minWidth: 0 } as const
+  const tileLabel = { fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 } as const
+  const tileValue = { fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, marginTop: 4 } as const
+
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
+        <motion.div custom={4} variants={fadeRise} initial="hidden" animate="visible" style={tile}>
+          <Clock size={18} color="#c27803" aria-hidden="true" />
+          <div style={tileLabel}>Due Soon (15 Days)</div>
+          <div style={{ ...tileValue, color: '#a16207' }}>{counts.dueSoon}</div>
+          <div style={{ fontSize: 12, color: '#92400e', fontWeight: 600, marginTop: 2 }}>{reminderCadenceLabel(data.reminderCadence)}</div>
+        </motion.div>
+        <motion.div custom={5} variants={fadeRise} initial="hidden" animate="visible" style={tile}>
+          <AlertTriangle size={18} color="#be123c" aria-hidden="true" />
+          <div style={tileLabel}>Action Required</div>
+          <div style={{ ...tileValue, color: '#be123c' }}>{counts.overdue}</div>
+          <div style={{ fontSize: 12, color: '#9f1239', fontWeight: 600, marginTop: 2 }}>Overdue birth-month exams</div>
+        </motion.div>
+      </div>
+
+      <motion.div custom={6} variants={fadeRise} initial="hidden" animate="visible" style={phoneCard}>
+        <div style={phoneTitle}>Department Clearance Status</div>
+        <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>Cleared, due soon and overdue staff by unit</div>
+        <DepartmentRows data={data.departmentClearance} />
+      </motion.div>
+
+      <motion.div custom={7} variants={fadeRise} initial="hidden" animate="visible" style={phoneCard}>
+        <div style={phoneTitle}>Screening Compliance Ratio</div>
+        <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>Hospital-wide health compliance status</div>
+        <ComplianceDonut counts={counts} />
+        <TargetLine rate={data.hospitalCompliance.rate} target={data.hospitalCompliance.targetPercent ?? DEFAULT_TARGET_PERCENT} />
+      </motion.div>
+
+      <div style={{ marginBottom: 16 }}><FollowUpCard data={data} /></div>
+    </>
+  )
+}
+
 /** The admin "Health Overview": hero, four headline numbers, department and compliance-ratio charts, and the
  * overdue follow-up list with a working "Send Reminder". Features the mockup doesn't draw (critical cases,
  * month-by-month analytics, CSV report exports) stay reachable in "More Overview" at the bottom. */
 export default function AdminLanding({ data: raw, onShowAnalytics, moreContent }: { data: AdminOverview; onShowAnalytics: () => void; moreContent: ReactNode }) {
-  // The frontend and backend deploy separately, so for a short window a new frontend can meet an old backend
-  // that doesn't send these fields yet. Default them so that window shows an empty page, not a crash.
-  const data: AdminOverview = {
-    ...raw,
-    trackedPercent: raw.trackedPercent ?? 0,
-    previousCycleRate: raw.previousCycleRate ?? null,
-    clearanceCounts: raw.clearanceCounts ?? { upToDate: 0, dueSoon: 0, overdue: 0 },
-    departmentClearance: raw.departmentClearance ?? [],
-    followUps: raw.followUps ?? [],
-    followUpTotal: raw.followUpTotal ?? 0,
-  }
+  const data = withAdminDefaults(raw)
   const { clearanceCounts: counts } = data
   const rate = data.hospitalCompliance.rate
   const delta = data.previousCycleRate === null ? null : rate - data.previousCycleRate

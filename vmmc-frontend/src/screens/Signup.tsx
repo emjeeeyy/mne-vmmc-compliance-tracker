@@ -118,7 +118,7 @@ export default function Signup() {
         placeholder="name@vmmc.gov.ph"
         style={{ width: '100%', padding: '14px 16px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 13, outline: 'none', boxSizing: 'border-box' }}
       />
-      <div style={{ fontSize: 12, color: '#718096', marginTop: 8 }}>{emailHelp[employmentType]}</div>
+      <div style={{ fontSize: 12, color: '#5a6678', marginTop: 8 }}>{emailHelp[employmentType]}</div>
     </div>
   )
 

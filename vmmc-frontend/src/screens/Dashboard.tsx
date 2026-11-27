@@ -9,7 +9,7 @@ import { getRole, getPreciseRole } from '@/lib/auth'
 import { api } from '@/lib/api'
 import { SkeletonBlock, SkeletonCard } from '@/components/Skeleton'
 import HeroBand from '@/components/HeroBand'
-import AdminLanding, { type AdminOverview } from './AdminLanding'
+import AdminLanding, { AdminPhoneOverview, type AdminOverview } from './AdminLanding'
 import { DEFAULT_TARGET_PERCENT, targetStatus } from '@/lib/compliance-target'
 import { formatFullDate, toCsv } from '@/lib/format'
 
@@ -267,9 +267,15 @@ function TrendBars({ data }: { data: MonthlyPoint[] }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+      {/* Twelve three-letter labels do not fit on a 360px phone (they pushed the page sideways), so below 380px each month is
+          shown as its first letter; the full name stays available to screen readers. */}
+      <div style={{ display: 'flex', gap: 4, marginTop: 8 }}>
         {data.map((d, i) => (
-          <div key={i} style={{ flex: 1, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#5f6b7d' }}>{d.label}</div>
+          <div key={i} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 12, fontWeight: 700, color: '#5f6b7d' }}>
+            <span className="sr-only">{d.label}</span>
+            <span aria-hidden="true" className="min-[380px]:hidden">{d.label.slice(0, 1)}</span>
+            <span aria-hidden="true" className="hidden min-[380px]:inline">{d.label}</span>
+          </div>
         ))}
       </div>
     </div>
@@ -469,7 +475,7 @@ export default function Dashboard() {
               <div style={{ fontSize: 12, color: '#cbd5e0' }}>Goal: {adminData?.hospitalCompliance.targetPercent ?? DEFAULT_TARGET_PERCENT}% Occupational Safety Standard · {targetStatus(adminData?.hospitalCompliance.rate ?? 0, adminData?.hospitalCompliance.targetPercent ?? DEFAULT_TARGET_PERCENT).text}</div>
             </motion.div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
               <motion.div custom={2} variants={fadeRise} initial="hidden" animate="visible" style={{ background: '#fff', borderRadius: 16, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                 <Users size={18} color="#4299e1" />
                 <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 8 }}>Total Personnel</div>
@@ -481,6 +487,8 @@ export default function Dashboard() {
                 <div style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#e53e3e', marginTop: 4 }}>{adminData?.criticalCases ?? 0}</div>
               </motion.div>
             </div>
+
+            {adminData && <AdminPhoneOverview data={adminData} />}
 
             <ReportsExportCard />
 

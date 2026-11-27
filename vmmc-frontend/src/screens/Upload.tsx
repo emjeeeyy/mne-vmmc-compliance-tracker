@@ -89,7 +89,7 @@ function shortDate(dateStr: string) {
 // radius, #ebebeb border, Poppins 14px Title Case labels. Placeholder/helper grays are darkened from
 // the mockup's #c6c6c6 to #767676 so they meet WCAG AA contrast.
 const formLabelStyle = { display: 'block' as const, fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 500, color: '#454545', marginBottom: 8 }
-const formInputStyle = { width: '100%', height: 41, padding: '0 18px', border: '1px solid #ebebeb', borderRadius: 12, background: '#fff', fontFamily: 'Poppins,sans-serif', fontSize: 14, color: '#454545', boxSizing: 'border-box' as const }
+const formInputStyle = { width: '100%', height: 44, padding: '0 18px', border: '1px solid #ebebeb', borderRadius: 12, background: '#fff', fontFamily: 'Poppins,sans-serif', fontSize: 14, color: '#454545', boxSizing: 'border-box' as const }
 const formInputClass = 'outline-none placeholder:text-[#767676] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#006042]'
 
 /** Native <select> in the mockup's input styling, with the mockup's chevron drawn on top. */
@@ -193,7 +193,7 @@ function UploadFormFields(p: UploadFormFieldsProps) {
           disabled={p.submitting}
           whileHover={p.submitting ? undefined : { filter: 'brightness(1.15)' }}
           whileTap={p.submitting ? undefined : { scale: 0.98 }}
-          style={{ height: 40, padding: '0 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#006042', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 600, cursor: p.submitting ? 'default' : 'pointer', opacity: p.submitting ? 0.75 : 1, whiteSpace: 'nowrap' }}
+          style={{ minHeight: 44, padding: '0 28px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#006042', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'Poppins,sans-serif', fontSize: 14, fontWeight: 600, cursor: p.submitting ? 'default' : 'pointer', opacity: p.submitting ? 0.75 : 1, whiteSpace: 'nowrap' }}
         >
           {p.submitting ? (p.retrying ? 'Retrying…' : 'Saving…') : 'Save Clearance Record'}
         </motion.button>

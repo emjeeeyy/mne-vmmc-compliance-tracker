@@ -98,7 +98,7 @@ function StatusBadge({ status }: { status: Status }) {
   if (status === '—') return <span style={{ color: '#5f6b7d', fontSize: 12, paddingRight: 10 }}>—</span>
   const isAlert = status === 'Infiltrate (L)' || status === 'Detected'
   const bgColor = isAlert ? '#fff5f5' : '#f0fff4'
-  const textColor = isAlert ? '#c53030' : '#2f855a'
+  const textColor = isAlert ? '#c53030' : '#276749'
   const borderColor = isAlert ? '#feb2b2' : '#9ae6b4'
   const dotColor = isAlert ? '#e53e3e' : '#38a169'
 
@@ -214,7 +214,7 @@ function MobileStaffCard({ staff, index, onView }: { staff: StaffMember; index: 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
         {[{ label: 'CXR Result', status: staff.xray }, { label: 'GeneXpert', status: staff.genexpert }].map(f => {
           const isAlert = f.status === 'Infiltrate (L)' || f.status === 'Detected'
-          let color = isAlert ? '#c53030' : '#2f855a'
+          let color = isAlert ? '#c53030' : '#276749'
           if (f.status === '—') color = '#a0aec0'
           return (
             <div key={f.label} style={{ background: '#f8fafc', borderRadius: 12, padding: '10px 12px' }}>
@@ -448,14 +448,14 @@ function toAdminStaffEntry(entry: TrackerEntry): AdminStaffEntry {
 }
 
 const adminStatusStyles: Record<AdminStatus, { bg: string; color: string }> = {
-  Compliant: { bg: '#e6f9ee', color: '#008d46' },
+  Compliant: { bg: '#e6f9ee', color: '#006b36' },
   Critical: { bg: '#fff5f5', color: '#c53030' },
   Pending: { bg: '#fffbea', color: '#b7791f' },
   'Non-Compliant': { bg: '#f1f5f9', color: '#4a5568' },
 }
 
 const statusGuideRows: { label: string; bg: string; border: string; color: string; desc: string }[] = [
-  { label: 'COMPLIANT', bg: '#e6f9ee', border: '#9ae6b4', color: '#008d46', desc: 'The staff has successfully submitted a negative CXR or GeneXpert result, and it has been officially signed/stamped by the TB Head. Clearance is valid for the current annual cycle.' },
+  { label: 'COMPLIANT', bg: '#e6f9ee', border: '#9ae6b4', color: '#006b36', desc: 'The staff has successfully submitted a negative CXR or GeneXpert result, and it has been officially signed/stamped by the TB Head. Clearance is valid for the current annual cycle.' },
   { label: 'CRITICAL', bg: '#fff5f5', border: '#feb2b2', color: '#c53030', desc: 'Requires immediate intervention. This means a positive GeneXpert result was uploaded or clinical symptoms were flagged. These personnel are restricted from hospital until further clinical review.' },
   { label: 'PENDING', bg: '#fffbea', border: '#f6e05e', color: '#b7791f', desc: 'Documents have been uploaded by the staff and are currently sitting in your "Review Queue". They are neither cleared nor flagged until you apply your digital signature or reject them.' },
   { label: 'NON-COMPLIANT', bg: '#f1f5f9', border: '#cbd5e0', color: '#4a5568', desc: 'Personnel who have not yet uploaded any documents, or whose submission were rejected by the TB Data Head due to errors (blurred images, expired results, etc.).' },
@@ -475,10 +475,14 @@ export default function Compliance() {
   const [preciseRole, setPreciseRole] = useState<PreciseRole | null>(null)
   const [showStatusGuide, setShowStatusGuide] = useState(false)
   const [departments, setDepartments] = useState<Department[]>([])
+  // Admin phone only: the simple Staff Directory (default) or the Health Modules registry the desktop shows.
+  const [adminPhoneView, setAdminPhoneView] = useState<'directory' | 'modules'>('directory')
 
+  // Only a unit head or admin may list departments (it feeds their department filter); a staff member would just get a 403.
   useEffect(() => {
+    if (!preciseRole || preciseRole === 'STAFF') return
     api.get<Department[]>('/departments').then(setDepartments).catch(() => {})
-  }, [])
+  }, [preciseRole])
 
   const mobileDeptFilters = [
     { label: 'All Units', value: ALL_DEPARTMENTS },
@@ -553,6 +557,25 @@ export default function Compliance() {
           <div className="sm:hidden">
             {preciseRole === 'ADMIN' ? (
               <>
+                <div role="group" aria-label="Clearance view" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                  {([['directory', 'Staff Directory'], ['modules', 'Health Modules']] as const).map(([value, label]) => {
+                    const active = adminPhoneView === value
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => setAdminPhoneView(value)}
+                        style={{ flex: 1, background: active ? '#1d3d93' : '#fff', color: active ? '#fff' : '#5a6678', border: 'none', borderRadius: 999, padding: '10px 12px', minHeight: 44, fontSize: 12, fontWeight: 800, letterSpacing: '0.02em', textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: active ? 'none' : '0 2px 6px rgba(0,0,0,0.04)' }}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {adminPhoneView === 'directory' && (
+                <>
                 <motion.div custom={0} variants={fadeRise} initial="hidden" animate="visible" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                   <div>
                     <h1 style={{ fontFamily: 'Poppins,sans-serif', fontSize: 22, fontWeight: 800, color: '#1f3151', margin: 0 }}>Staff Directory</h1>
@@ -580,7 +603,7 @@ export default function Compliance() {
                       <button
                         key={f.value}
                         onClick={() => setDept(f.value)}
-                        style={{ flexShrink: 0, background: active ? '#1d3d93' : '#fff', color: active ? '#fff' : '#718096', border: 'none', borderRadius: 999, padding: '10px 18px', minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: active ? 'none' : '0 2px 6px rgba(0,0,0,0.04)' }}
+                        style={{ flexShrink: 0, background: active ? '#1d3d93' : '#fff', color: active ? '#fff' : '#5a6678', border: 'none', borderRadius: 999, padding: '10px 18px', minHeight: 44, display: 'flex', alignItems: 'center', fontSize: 12, fontWeight: 700, letterSpacing: '0.02em', cursor: 'pointer', whiteSpace: 'nowrap', boxShadow: active ? 'none' : '0 2px 6px rgba(0,0,0,0.04)' }}
                       >
                         {f.label.toUpperCase()}
                       </button>
@@ -609,6 +632,8 @@ export default function Compliance() {
                 {!loading && adminFiltered.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '40px 0', color: '#5f6b7d', fontSize: 13 }}>No results found.</div>
                 )}
+                </>
+                )}
               </>
             ) : (
               <>
@@ -617,9 +642,24 @@ export default function Compliance() {
                   <div style={{ fontSize: 12, color: '#5f6b7d', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 2 }}>Department Database</div>
                 </motion.div>
 
+                {/* Same search the desktop registry has (it was missing on the phone): the backend matches a name or an employee ID. */}
+                <motion.div custom={1} variants={fadeRise} initial="hidden" animate="visible" style={{ position: 'relative', marginBottom: 16 }}>
+                  <Search size={16} color="#a0aec0" aria-hidden="true" style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)' }} />
+                  <input
+                    inputMode="search"
+                    enterKeyHint="search"
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    aria-label="Search employees by name or Employee ID"
+                    placeholder="Search by name or Employee ID..."
+                    className="focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#006042] placeholder:text-[#767676]"
+                    style={{ width: '100%', padding: '13px 16px 13px 42px', minHeight: 44, border: 'none', borderRadius: 999, fontSize: 13, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', background: '#fff', boxSizing: 'border-box', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}
+                  />
+                </motion.div>
+
                 {loading && [0, 1, 2, 3, 4].map(i => <SkeletonListRow key={i} />)}
                 {!loading && filtered.map((staff, i) => (
-                  <MobileStaffCard key={staff.id + staff.name} staff={staff} index={i + 1} onView={() => setSelectedStaff(staff)} />
+                  <MobileStaffCard key={staff.id + staff.name} staff={staff} index={i + 2} onView={() => setSelectedStaff(staff)} />
                 ))}
                 {!loading && filtered.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '40px 0', color: '#5f6b7d', fontSize: 13 }}>No results found.</div>
@@ -629,7 +669,7 @@ export default function Compliance() {
           </div>
 
           {/* Tablet / desktop tracker */}
-          <div className="hidden sm:block">
+          <div className={preciseRole === 'ADMIN' && adminPhoneView === 'modules' ? 'block' : 'hidden sm:block'}>
             {preciseRole === 'ADMIN' ? (
               <ModulesRegistry />
             ) : (
@@ -713,7 +753,7 @@ export default function Compliance() {
                   { label: 'GeneXpert', status: selectedStaff.genexpert },
                 ] as const).map(f => {
                   const isAlert = f.status === 'Infiltrate (L)' || f.status === 'Detected'
-                  const color = f.status === '—' ? '#a0aec0' : isAlert ? '#c53030' : '#2f855a'
+                  const color = f.status === '—' ? '#a0aec0' : isAlert ? '#c53030' : '#276749'
                   return (
                     <div key={f.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', borderRadius: 12, padding: '12px 14px' }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#5f6b7d', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{f.label}</span>

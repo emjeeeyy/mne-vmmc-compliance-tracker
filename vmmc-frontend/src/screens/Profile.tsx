@@ -75,7 +75,7 @@ type MobileModalKey = 'activity' | 'privacy' | 'account' | 'changeRequests' | 'p
 
 type AdminView = 'signature' | 'privacy' | 'changeRequests'
 
-type MenuRow = { icon: typeof Clock; color: string; bg: string; label: string; modalKey: MobileModalKey | null; view?: AdminView }
+type MenuRow = { icon: typeof Clock; color: string; bg: string; label: string; modalKey: MobileModalKey | null; view?: AdminView; action?: 'download' }
 
 const mobileMenuRows: MenuRow[] = [
   { icon: Clock, color: '#4299e1', bg: '#ebf8ff', label: 'Activity Logs', modalKey: 'activity' },
@@ -88,6 +88,10 @@ const adminMenuRows: MenuRow[] = [
   { icon: Clock, color: '#4299e1', bg: '#ebf8ff', label: 'Digital Signature', modalKey: null, view: 'signature' },
   { icon: Shield, color: '#047857', bg: '#f0fff4', label: 'Privacy & Security', modalKey: null, view: 'privacy' },
   { icon: FileEdit, color: '#805ad5', bg: '#faf5ff', label: 'Change Requests', modalKey: null, view: 'changeRequests' },
+  { icon: AlertCircle, color: '#b42318', bg: '#fef2f2', label: 'System Audit Trail', modalKey: 'activity' },
+  { icon: User, color: '#92400e', bg: '#fffaf0', label: 'Account Security', modalKey: 'account' },
+  { icon: FileEdit, color: '#805ad5', bg: '#faf5ff', label: 'Request a Change', modalKey: 'changeRequests' },
+  { icon: Download, color: '#59197a', bg: '#f5e4ff', label: 'Download Data Log', modalKey: null, action: 'download' },
 ]
 
 /** Fields routed through the request-and-approve workflow instead of the direct
@@ -121,9 +125,11 @@ interface PerformanceStats { reviews: number; approvals: number; approvalRate: n
 
 type AdminPrivacyView = 'list' | 'password' | '2fa' | 'history'
 
-type PrivacyView = 'list' | 'pin' | 'devices' | 'data'
+type PrivacyView = 'list' | 'pin' | 'devices' | 'data' | 'password' | '2fa'
 
 const mobilePrivacyRows: { icon: typeof Lock; label: string; view: PrivacyView }[] = [
+  { icon: KeyRound, label: 'Change Password', view: 'password' },
+  { icon: ShieldCheck, label: 'Two-Factor Authentication', view: '2fa' },
   { icon: Lock, label: 'Change PIN', view: 'pin' },
   { icon: Smartphone, label: 'Manage Devices', view: 'devices' },
   { icon: Eye, label: 'Data Privacy Settings', view: 'data' },
@@ -134,6 +140,8 @@ const privacyViewTitle: Record<PrivacyView, string> = {
   pin: 'CHANGE PIN',
   devices: 'MANAGE DEVICES',
   data: 'DATA PRIVACY SETTINGS',
+  password: 'CHANGE PASSWORD',
+  '2fa': 'TWO-FACTOR AUTHENTICATION',
 }
 
 const dataPrivacyOptions = [
@@ -689,6 +697,11 @@ export default function Profile() {
   }
   const adminBackLabelDesktop = adminView === 'signature' && drawMode ? 'Back' : 'Back to Profile'
 
+  // The Activity window shows the person's own log, or for an administrator the whole system's audit trail.
+  const trailLoaded = role === 'admin' ? (auditTrail?.length ?? 0) : activityLogs.length
+  const trailHasMore = Boolean(role === 'admin' ? auditTrailCursor : activityCursor)
+  const trailCountLabel = `${trailLoaded}${trailHasMore ? '+ loaded' : ' total'}`
+
   return (
     <div>
       {/* Mobile-native profile (phones, < sm) */}
@@ -777,6 +790,29 @@ export default function Profile() {
                     initial="hidden"
                     animate="visible"
                     onClick={() => setAdminPrivacyView(row.view)}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, background: '#fff', borderRadius: 16, padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 12, border: 'none', cursor: 'pointer' }}
+                  >
+                    <div style={{ width: 38, height: 38, borderRadius: 10, background: row.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <row.icon size={18} color={row.color} />
+                    </div>
+                    <div style={{ flex: 1, textAlign: 'left' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151' }}>{row.label}</div>
+                      <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2 }}>{row.subtitle}</div>
+                    </div>
+                    <ChevronRight size={18} color="#cbd5e0" />
+                  </motion.button>
+                ))}
+                {[
+                  { icon: Lock, color: '#4299e1', bg: '#ebf8ff', label: 'Change PIN', subtitle: 'Confirm sensitive actions', view: 'pin' as const },
+                  { icon: Smartphone, color: '#047857', bg: '#f0fff4', label: 'Signed-in Devices', subtitle: 'Review and remove devices', view: 'devices' as const },
+                ].map((row, i) => (
+                  <motion.button
+                    key={row.label}
+                    custom={adminPrivacyRows.length + i + 1}
+                    variants={fadeRise}
+                    initial="hidden"
+                    animate="visible"
+                    onClick={() => { setActiveModal('privacy'); setPrivacyView(row.view) }}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, background: '#fff', borderRadius: 16, padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 12, border: 'none', cursor: 'pointer' }}
                   >
                     <div style={{ width: 38, height: 38, borderRadius: 10, background: row.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -980,16 +1016,36 @@ export default function Profile() {
             variants={fadeRise}
             initial="hidden"
             animate="visible"
-            onClick={() => (row.view ? setAdminView(row.view) : row.modalKey && setActiveModal(row.modalKey))}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, background: '#fff', borderRadius: 16, padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 12, border: 'none', cursor: 'pointer' }}
+            onClick={() => (row.view ? setAdminView(row.view) : row.action === 'download' ? void downloadDataLog() : row.modalKey && setActiveModal(row.modalKey))}
+            disabled={row.action === 'download' && activityLogs.length === 0}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, background: '#fff', borderRadius: 16, padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 12, border: 'none', cursor: 'pointer', opacity: row.action === 'download' && activityLogs.length === 0 ? 0.6 : 1 }}
           >
             <div style={{ width: 38, height: 38, borderRadius: 10, background: row.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <row.icon size={18} color={row.color} />
             </div>
             <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#1f3151', letterSpacing: '0.02em', textTransform: 'uppercase', textAlign: 'left' }}>{row.label}</span>
-            <ChevronRight size={18} color="#cbd5e0" />
+            {row.action ? null : <ChevronRight size={18} color="#cbd5e0" />}
           </motion.button>
         ))}
+
+        <motion.button
+          custom={(role === 'admin' ? adminMenuRows : mobileMenuRows).length + 1}
+          variants={fadeRise}
+          initial="hidden"
+          animate="visible"
+          onClick={syncProfile}
+          disabled={syncing}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 14, background: '#fff', borderRadius: 16, padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: 12, border: 'none', cursor: syncing ? 'default' : 'pointer' }}
+        >
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <RefreshCw size={18} color="#5f6b7d" aria-hidden="true" style={{ transition: 'transform 0.6s', transform: syncing ? 'rotate(360deg)' : 'none' }} />
+          </div>
+          <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#1f3151', letterSpacing: '0.02em', textTransform: 'uppercase', textAlign: 'left' }}>{syncing ? 'Syncing…' : syncedAt ? 'Synced' : 'Sync Profile'}</span>
+        </motion.button>
+
+        {role === 'admin' && !activeModal && activityError && (
+          <p role="alert" style={{ fontSize: 12, fontWeight: 700, color: '#b42318', margin: '0 4px 12px' }}>{activityError}</p>
+        )}
 
           </>
         )}
@@ -1609,8 +1665,8 @@ export default function Profile() {
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   {activeModal === 'privacy' && privacyView !== 'list' && (
-                    <button onClick={() => setPrivacyView('list')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', width: 44, height: 44, marginLeft: -12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <ChevronLeft size={18} />
+                    <button onClick={() => setPrivacyView('list')} aria-label="Back to Privacy & Security" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1f3151', width: 44, height: 44, marginLeft: -12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <ChevronLeft size={18} aria-hidden="true" />
                     </button>
                   )}
                   <span id="profile-modal-title" style={{ fontFamily: 'Poppins,sans-serif', fontSize: 16, fontWeight: 800, color: '#1f3151', letterSpacing: '0.02em' }}>
@@ -1623,12 +1679,12 @@ export default function Profile() {
                   </span>
                   {activeModal === 'activity' && (
                     <span style={{ borderRadius: 999, background: '#f1f5f9', padding: '4px 9px', color: '#5f6b7d', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      {activityCursor ? `${activityLogs.length}+ loaded` : `${activityLogs.length} total`}
+                      {trailCountLabel}
                     </span>
                   )}
                   {activeModal === 'activity' && (
                     <span style={{ flexBasis: '100%', fontSize: 12, color: '#5e6d85', lineHeight: 1.4 }}>
-                      Your own recorded actions, from the system&apos;s append-only audit log
+                      {role === 'admin' ? 'Recent recorded actions across the system, from the append-only audit log' : 'Your own recorded actions, from the system\u2019s append-only audit log'}
                     </span>
                   )}
                 </div>
@@ -1637,7 +1693,17 @@ export default function Profile() {
                 </button>
               </div>
 
-              {activeModal === 'activity' && (
+              {activeModal === 'activity' && role !== 'admin' && (
+                <div className="sm:hidden" style={{ padding: '12px 22px', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
+                  <button onClick={downloadDataLog} disabled={activityLogs.length === 0}
+                    style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 44, padding: '0 14px', background: '#f5e4ff', border: '1px solid #e2c6f7', borderRadius: 10, color: '#59197a', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: activityLogs.length === 0 ? 'default' : 'pointer', opacity: activityLogs.length === 0 ? 0.6 : 1 }}
+                  >
+                    <Download size={15} aria-hidden="true" /> Download Data Log
+                  </button>
+                </div>
+              )}
+
+              {activeModal === 'activity' && role !== 'admin' && (
                 <div role="region" aria-label="All account activity" tabIndex={0} style={{ overflow: 'auto', minHeight: 0, flex: '1 1 auto', overscrollBehavior: 'contain' }}>
                   <table style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse', tableLayout: 'fixed' }}>
                     <caption className="sr-only">All of your recorded account activity</caption>
@@ -1669,7 +1735,37 @@ export default function Profile() {
                   {activityError && <div role="alert" style={{ padding: '12px 24px', color: '#b42318', fontSize: 13 }}>{activityError}</div>}
                   {Boolean(activityCursor) && (
                     <div style={{ display: 'flex', justifyContent: 'center', padding: 16, borderTop: '1px solid #eef1f5' }}>
-                      <button onClick={loadMoreActivityLogs} disabled={activityLoadingMore} style={{ minHeight: 40, padding: '0 18px', border: '1px solid #d5dce6', borderRadius: 10, background: '#fff', color: '#1f3151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: activityLoadingMore ? 'wait' : 'pointer' }}>{activityLoadingMore ? 'Loading…' : 'Load more activity'}</button>
+                      <button onClick={loadMoreActivityLogs} disabled={activityLoadingMore} style={{ minHeight: 44, padding: '0 18px', border: '1px solid #d5dce6', borderRadius: 10, background: '#fff', color: '#1f3151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: activityLoadingMore ? 'wait' : 'pointer' }}>{activityLoadingMore ? 'Loading…' : 'Load more activity'}</button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeModal === 'activity' && role === 'admin' && (
+                <div role="region" aria-label="System audit trail" tabIndex={0} style={{ overflow: 'auto', minHeight: 0, flex: '1 1 auto', overscrollBehavior: 'contain' }}>
+                  {auditTrail === null && <div role="status" style={{ textAlign: 'center', color: '#5f6b7d', fontSize: 13, padding: '28px 24px' }}>Loading the audit trail…</div>}
+                  {auditTrail !== null && auditTrail.length === 0 && !auditTrailError && (
+                    <div style={{ textAlign: 'center', color: '#5f6b7d', fontSize: 13, padding: '28px 24px' }}>No activity recorded yet.</div>
+                  )}
+                  <ul style={{ listStyle: 'none', margin: 0, padding: '4px 22px 8px' }}>
+                    {(auditTrail ?? []).map((e, i) => {
+                      const asLog: ActivityLogEntry = { title: e.title, time: e.time, ip: null, action: e.action, entityType: e.entityType, entityRef: e.entityRef }
+                      return (
+                        <li key={`${e.time}-${i}`} style={{ padding: '12px 0', borderTop: i > 0 ? '1px solid #eef1f5' : 'none' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '2px 10px', flexWrap: 'wrap' }}>
+                            <span title={e.title} style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', overflowWrap: 'anywhere' }}>{auditActionCode(asLog)}</span>
+                            <span style={{ fontSize: 12, color: '#5f6b7d' }}>{formatAuditTimestamp(e.time)}</span>
+                          </div>
+                          <div style={{ fontSize: 12, color: '#4b5563', marginTop: 2, overflowWrap: 'anywhere' }}>{auditResource(asLog)}</div>
+                          <div style={{ fontSize: 12, color: '#5f6b7d', marginTop: 2, overflowWrap: 'anywhere' }}>{e.actor ? `${e.actor.fullName} · ${e.actor.employeeId} · ${ROLE_LABEL[e.actor.role]}` : 'Not signed in'}</div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {auditTrailError && <div role="alert" style={{ padding: '12px 22px', color: '#b42318', fontSize: 13 }}>{auditTrailError}</div>}
+                  {Boolean(auditTrailCursor) && (
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: 16, borderTop: '1px solid #eef1f5' }}>
+                      <button onClick={loadMoreAuditTrail} disabled={auditTrailLoadingMore} style={{ minHeight: 44, padding: '0 18px', border: '1px solid #d5dce6', borderRadius: 10, background: '#fff', color: '#1f3151', fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 600, cursor: auditTrailLoadingMore ? 'wait' : 'pointer' }}>{auditTrailLoadingMore ? 'Loading…' : 'Load more'}</button>
                     </div>
                   )}
                 </div>
@@ -1681,6 +1777,9 @@ export default function Profile() {
                     <button key={row.label} onClick={() => setPrivacyView(row.view)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, background: '#f8fafc', border: 'none', borderRadius: 14, padding: '14px 16px', cursor: 'pointer' }}>
                       <row.icon size={17} color="#1f3151" strokeWidth={1.5} />
                       <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: '#1f3151', textAlign: 'left' }}>{row.label}</span>
+                      {row.view === '2fa' && (
+                        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', color: twoFactorEnabled ? '#047857' : '#5f6b7d' }}>{twoFactorEnabled ? 'ON' : 'OFF'}</span>
+                      )}
                       <ChevronRight size={16} color="#cbd5e0" />
                     </button>
                   ))}
@@ -1771,10 +1870,10 @@ export default function Profile() {
                     {dataPrivacyOptions.map((opt, i) => (
                       <div key={opt.key} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 0', borderTop: i > 0 ? '1px solid #e2e8f0' : 'none' }}>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', marginBottom: 2 }}>{opt.label}</div>
+                          <div id={`dp-label-${opt.key}`} style={{ fontSize: 13, fontWeight: 700, color: '#1f3151', marginBottom: 2 }}>{opt.label}</div>
                           <div style={{ fontSize: 12, color: '#5f6b7d', lineHeight: 1.4 }}>{opt.desc}</div>
                         </div>
-                        <ToggleSwitch checked={dataToggles[opt.key]} onChange={() => toggleDataPrivacy(opt.key)} />
+                        <ToggleSwitch checked={dataToggles[opt.key]} onChange={() => toggleDataPrivacy(opt.key)} labelledBy={`dp-label-${opt.key}`} />
                       </div>
                     ))}
                   </div>
@@ -1837,7 +1936,7 @@ export default function Profile() {
                 </div>
               )}
 
-              {activeModal === 'password' && (
+              {(activeModal === 'password' || (activeModal === 'privacy' && privacyView === 'password')) && (
                 <div>
                   {[
                     { id: 'pw-current', label: 'Current Password', value: currentPassword, onChange: setCurrentPassword, autoComplete: 'current-password' },
@@ -1855,7 +1954,7 @@ export default function Profile() {
                     <p role="alert" style={{ fontSize: 12, fontWeight: 700, color: '#c53030', marginBottom: 16 }}>{pwErrorMessage || pwServerError}</p>
                   )}
                   <button
-                    onClick={() => handleUpdatePassword(closeModal)}
+                    onClick={() => handleUpdatePassword(activeModal === 'privacy' ? () => setPrivacyView('list') : closeModal)}
                     style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, minHeight: 44, background: '#006042', color: '#fff', border: 'none', borderRadius: 14, fontFamily: 'Poppins,sans-serif', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}
                   >
                     {pwSaved ? <><Check size={15} /> Password Updated!</> : 'Update Password'}
@@ -1863,7 +1962,7 @@ export default function Profile() {
                 </div>
               )}
 
-              {activeModal === '2fa' && (
+              {(activeModal === '2fa' || (activeModal === 'privacy' && privacyView === '2fa')) && (
                 <div>
                   <p style={{ fontSize: 13, color: '#5f6b7d', lineHeight: 1.6, marginBottom: 16 }}>
                     When on, each sign-in also asks for a one-time code sent to your email ({email || 'your account email'}).
@@ -1882,8 +1981,9 @@ export default function Profile() {
                   </p>
 
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>Field</label>
+                    <label htmlFor="cr-field" style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>Field</label>
                     <select
+                      id="cr-field"
                       value={crFieldName}
                       onChange={e => setCrFieldName(e.target.value)}
                       style={{ width: '100%', padding: '12px 14px', border: '1px solid #e2e8f0', borderRadius: 12, fontSize: 13, fontFamily: 'Public Sans,sans-serif', color: '#1f3151', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
@@ -1893,8 +1993,9 @@ export default function Profile() {
                   </div>
 
                   <div style={{ marginBottom: 12 }}>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>New Value</label>
+                    <label htmlFor="cr-value" style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>New Value</label>
                     <input
+                      id="cr-value"
                       type={crFieldName === 'birth_date' ? 'date' : 'text'}
                       value={crRequestedValue}
                       onChange={e => setCrRequestedValue(e.target.value)}
@@ -1904,8 +2005,9 @@ export default function Profile() {
                   </div>
 
                   <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>Reason</label>
+                    <label htmlFor="cr-reason" style={{ display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f6b7d', marginBottom: 6 }}>Reason</label>
                     <textarea
+                      id="cr-reason"
                       value={crReason}
                       onChange={e => setCrReason(e.target.value)}
                       placeholder="Why does this need to change?"
