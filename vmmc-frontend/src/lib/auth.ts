@@ -19,6 +19,41 @@ export interface AuthSession {
 }
 
 const STORAGE_KEY = 'vmmc_session'
+/** The token itself, kept in this tab's session storage ONLY in the split-site mode described below. */
+const TOKEN_KEY = 'vmmc_token'
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.trim() ?? 'http://localhost:8443/api'
+
+/**
+ * Where does the sign-in token live?
+ *
+ * Normally in the backend's HttpOnly cookie, which page scripts cannot read. A cookie only works when the website
+ * and the API are on the SAME site (localhost, or app.example.com plus api.example.com). When they are on different
+ * sites (a Vercel address plus a Railway or Render address), Safari, iPhones and incognito windows refuse that cookie,
+ * so sign-in would succeed and the next request would be anonymous. In that situation (and only then) the token is kept
+ * in this tab's sessionStorage and sent as an `Authorization: Bearer` header, which the backend already accepts.
+ *
+ * Cost: a script injected into the page could read the token. It is limited by a strict Content-Security-Policy
+ * (src/proxy.ts), the app inserting no raw HTML, a 60-minute lifetime and tab-only storage (never localStorage).
+ *
+ * `override` is NEXT_PUBLIC_SESSION_TOKEN_MODE: "cookie" forces cookie-only (use it once both sit under one domain),
+ * "header" forces the header mode; anything else decides by comparing the two host names.
+ */
+export function shouldKeepTokenInBrowser(apiUrl: string, pageHostname: string, override?: string): boolean {
+  const mode = (override ?? '').trim().toLowerCase()
+  if (mode === 'cookie') return false
+  if (mode === 'header') return true
+  try {
+    // A relative API address ("/api") is served by the website itself, so it resolves to the page's own host.
+    const apiHost = new URL(apiUrl, `http://${pageHostname}`).hostname.toLowerCase()
+    return apiHost !== pageHostname.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+function keepTokenInBrowser(): boolean {
+  return typeof window !== 'undefined' && shouldKeepTokenInBrowser(API_URL, window.location.hostname, process.env.NEXT_PUBLIC_SESSION_TOKEN_MODE)
+}
 
 function readSession(): AuthSession | null {
   if (typeof window === 'undefined') return null
@@ -28,6 +63,7 @@ function readSession(): AuthSession | null {
     const session = JSON.parse(raw) as AuthSession
     if (session.expiresAt * 1000 < Date.now()) {
       sessionStorage.removeItem(STORAGE_KEY)
+      sessionStorage.removeItem(TOKEN_KEY)
       return null
     }
     return session
@@ -42,8 +78,11 @@ export function isAuthenticated() {
 
 /** Called by Login.tsx once the real login API call succeeds. */
 export function login(session: AuthSession) {
-  const { accessToken: _accessToken, ...safeSession } = session
+  const { accessToken, ...safeSession } = session
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(safeSession))
+  // The token never goes into the session summary above. It is stored separately, and only when a cookie cannot work.
+  if (keepTokenInBrowser() && accessToken) sessionStorage.setItem(TOKEN_KEY, accessToken)
+  else sessionStorage.removeItem(TOKEN_KEY)
 }
 
 export function setPasswordChangeRequired(required: boolean) {
@@ -72,21 +111,27 @@ export function updateUser(patch: Partial<Pick<AuthUser, 'fullName' | 'email'>>)
 
 export function logout() {
   const session = readSession()
+  const token = getToken()
   sessionStorage.removeItem(STORAGE_KEY)
+  sessionStorage.removeItem(TOKEN_KEY)
 
   if (session) {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL?.trim() ?? 'http://localhost:8443/api'}/auth/logout`, {
+    // In the split-site mode the server only knows who is logging out from the header, so send it.
+    fetch(`${API_URL}/auth/logout`, {
       method: 'POST',
       credentials: 'include',
+      ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
     }).catch(() => {})
   }
 }
 
 export function getToken(): string | null {
-  // The real bearer token now lives in an HttpOnly secure cookie. The browser sends it
-  // automatically on same-origin API requests when `credentials: 'include'` is set, and the
-  // frontend keeps only a non-sensitive session shell in sessionStorage for UI state.
-  return null
+  // Normally null: the bearer token lives in an HttpOnly secure cookie that the browser sends by itself when
+  // `credentials: 'include'` is set, and the frontend keeps only a non-secret session summary in sessionStorage.
+  // Only in the split-site mode (see shouldKeepTokenInBrowser) is the token in this tab's storage, and only while the
+  // session is still valid.
+  if (!keepTokenInBrowser() || readSession() === null) return null
+  return sessionStorage.getItem(TOKEN_KEY)
 }
 
 export function getUser(): AuthUser | null {

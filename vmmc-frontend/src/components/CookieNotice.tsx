@@ -15,20 +15,6 @@ const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/first-login', 
    - phone (< 640px) inside the app: raised above the fixed bottom tab bar (12px gap + ~60px bar + 16px margin);
    - phone/tablet on a public page: bottom of the screen, and the page is given matching bottom padding (see the effect
      below), so a button underneath can always be scrolled clear of it. */
-const CSS = `
-.vmmc-cookie-notice { position: fixed; z-index: 1000; left: 12px; right: 12px; bottom: 12px; max-width: 520px; margin: 0 auto; }
-.vmmc-cookie-notice[data-area="app"] { bottom: 92px; }
-@media (min-width: 640px) {
-  .vmmc-cookie-notice { left: 16px; right: auto; bottom: 16px; width: 360px; margin: 0; }
-  .vmmc-cookie-notice[data-area="app"] { bottom: 16px; }
-}
-/* Inside the app on a phone the page scrolls inside <main>, whose bottom padding only clears the tab bar. The notice
-   floats above the tab bar, so without this the last control on a long page (the Save button on the upload form) can
-   never be scrolled out from under it. The notice's own height is published as --vmmc-notice-h (see the effect). */
-@media (max-width: 639px) {
-  body[data-cookie-notice-app] main { padding-bottom: calc(108px + var(--vmmc-notice-h, 0px)); }
-}
-`
 
 export default function CookieNotice() {
   const pathname = usePathname()
@@ -90,7 +76,6 @@ export default function CookieNotice() {
 
   return (
     <>
-      <style>{CSS}</style>
       <aside
         ref={noticeRef}
         className="vmmc-cookie-notice"
@@ -128,7 +113,7 @@ export default function CookieNotice() {
 
         {detailsOpen && (
           <div style={{ marginTop: 10, padding: 12, background: '#f4f7f6', borderRadius: 8, fontSize: 12, lineHeight: 1.6, color: '#40546b' }}>
-            The <code>vmmc_session</code> cookie is HttpOnly, so page scripts cannot read its value. Your browser sends it to the API while you are signed in; it uses SameSite=Lax and Secure in production. The notice dismissal is kept in this tab&apos;s session storage and does not create another cookie. No optional analytics or advertising cookies are used by this app.
+            The <code>vmmc_session</code> cookie is HttpOnly, so page scripts cannot read its value. Your browser sends it to the API while you are signed in; it uses SameSite=Lax and Secure in production. If your browser refuses it because the website and server are on different sites, your sign-in is kept in this tab&apos;s session storage instead and is cleared when you log out or close the tab. The notice dismissal is kept in this tab&apos;s session storage and does not create another cookie. No optional analytics or advertising cookies are used by this app.
           </div>
         )}
 

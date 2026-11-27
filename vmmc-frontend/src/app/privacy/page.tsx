@@ -36,7 +36,7 @@ export default function PrivacyPage() {
 
         <section id="cookies" style={sectionStyle}>
           <h2 style={headingStyle}>Cookies and browser storage</h2>
-          <p style={paragraphStyle}>After successful sign-in, the system uses the <code>vmmc_session</code> HttpOnly cookie to authenticate requests to the backend. The browser sends it automatically; JavaScript cannot read its value. It is configured as SameSite=Lax and Secure in production, and its lifetime follows the sign-in session.</p>
+          <p style={paragraphStyle}>After successful sign-in, the system authenticates requests to the backend with a session token. When the website and the backend are served from the same site, the token is kept in the <code>vmmc_session</code> HttpOnly cookie: the browser sends it automatically and JavaScript cannot read its value (SameSite=Lax, and Secure in production). When they are served from different sites, browsers such as Safari on iPhones refuse that cookie, so the app instead keeps the token in this browser tab&apos;s session storage and sends it with each request. In that case the token is removed when you log out or close the tab and expires with the sign-in session. Because page scripts could read it there, the app limits which scripts a page may run (a Content Security Policy), inserts no raw HTML and loads no third-party scripts. Its lifetime follows the sign-in session in both cases.</p>
           <p style={paragraphStyle}>The app also keeps a non-secret session summary in session storage for interface state. The cookie-notice dismissal is stored in session storage for the current browser tab. The app does not currently use optional analytics or advertising cookies.</p>
         </section>
 

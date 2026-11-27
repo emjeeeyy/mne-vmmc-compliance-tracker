@@ -42,11 +42,6 @@ export default function OtpInput({ value, onChange, length = 6, label = 'Verific
       <label htmlFor={id} className={labelHidden ? 'sr-only' : undefined} style={labelHidden ? undefined : { display: 'block', fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1f3151', marginBottom: 10, textAlign: 'center' }}>
         {label}
       </label>
-      <style>{`
-        @keyframes vmmc-otp-caret { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
-        .vmmc-otp-caret { animation: vmmc-otp-caret 1.1s steps(1) infinite }
-        @media (prefers-reduced-motion: reduce) { .vmmc-otp-caret { animation: none } }
-      `}</style>
       <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', gap: 8 }}>
         {Array.from({ length }, (_, i) => {
           const isActive = focused && !disabled && i === active

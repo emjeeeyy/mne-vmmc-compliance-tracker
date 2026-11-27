@@ -1,5 +1,48 @@
 import { describe, expect, it } from 'vitest'
-import { getInitials, withUserUpdate, type AuthSession } from './auth'
+import { getInitials, shouldKeepTokenInBrowser, withUserUpdate, type AuthSession } from './auth'
+
+describe('shouldKeepTokenInBrowser (is the token kept in the tab, or left to the HttpOnly cookie?)', () => {
+  it('cookie only when the website and the API are on the same host (local development)', () => {
+    expect(shouldKeepTokenInBrowser('http://localhost:8443/api', 'localhost')).toBe(false)
+  })
+
+  it('cookie only when the API is the website itself (a relative address)', () => {
+    expect(shouldKeepTokenInBrowser('/api', 'app.example.com')).toBe(false)
+  })
+
+  it('keeps the token in the tab when the site and the API are on different hosts (Vercel plus Railway or Render)', () => {
+    expect(shouldKeepTokenInBrowser('https://mne-prod.up.railway.app/api', 'vmmc.vercel.app')).toBe(true)
+    expect(shouldKeepTokenInBrowser('https://vmmc-api.onrender.com/api', 'vmmc.vercel.app')).toBe(true)
+  })
+
+  it('treats localhost and 127.0.0.1 as different hosts, as a browser does', () => {
+    expect(shouldKeepTokenInBrowser('http://localhost:8443/api', '127.0.0.1')).toBe(true)
+  })
+
+  it('compares host names, not ports', () => {
+    expect(shouldKeepTokenInBrowser('http://localhost:8443/api', 'localhost')).toBe(false)
+    expect(shouldKeepTokenInBrowser('https://api.example.com:8443/api', 'api.example.com')).toBe(false)
+  })
+
+  it('ignores letter case in host names', () => {
+    expect(shouldKeepTokenInBrowser('https://API.Example.com/api', 'api.example.com')).toBe(false)
+  })
+
+  it('"cookie" forces cookie-only and "header" forces the tab, whatever the hosts are', () => {
+    expect(shouldKeepTokenInBrowser('https://api.example.com/api', 'app.example.com', 'cookie')).toBe(false)
+    expect(shouldKeepTokenInBrowser('http://localhost:8443/api', 'localhost', 'header')).toBe(true)
+    expect(shouldKeepTokenInBrowser('https://api.example.com/api', 'app.example.com', ' COOKIE ')).toBe(false)
+  })
+
+  it('an unknown override value falls back to comparing hosts', () => {
+    expect(shouldKeepTokenInBrowser('https://api.example.com/api', 'app.example.com', 'auto')).toBe(true)
+    expect(shouldKeepTokenInBrowser('/api', 'app.example.com', '')).toBe(false)
+  })
+
+  it('a malformed API address never throws and defaults to the safer cookie mode', () => {
+    expect(shouldKeepTokenInBrowser('http://', 'app.example.com')).toBe(false)
+  })
+})
 
 describe('withUserUpdate', () => {
   const session: AuthSession = {

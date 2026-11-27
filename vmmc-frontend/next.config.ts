@@ -9,6 +9,20 @@ import path from 'node:path'
 // `VERCEL=1` during every build), and forcing `turbopack.root` on top of that there makes the two
 // disagree — Next treats that as fatal mid-build on Vercel instead of just warning like it does locally.
 const nextConfig: NextConfig = {
+  // The Content-Security-Policy itself is set per request in src/proxy.ts (it needs a fresh nonce each time). These
+  // are the fixed companions: no content-type guessing, no referrer leaking to other sites, no framing of the app.
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+        ],
+      },
+    ]
+  },
   ...(process.env.VERCEL
     ? {}
     : {
